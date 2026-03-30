@@ -7,13 +7,15 @@ A full validation workflow manager: import findings, validate one by one, genera
 
 ## Installation
 
-1. Open Chrome and go to `chrome://extensions`
-2. Enable **Developer mode** (toggle, top-right)
-3. Click **Load unpacked**
-4. Select this `lava-extension` folder
-5. LAVA will appear in your extensions bar
+> **Note:** LAVA is not available in the Chrome Web Store and there are no current plans to publish it there. Installation is done manually via Chrome's developer mode.
 
-> **Note on icons:** Chrome will show a default icon since no custom icons are included. To add yours, place `icon16.png`, `icon48.png`, and `icon128.png` in an `icons/` folder and update `manifest.json` accordingly.
+1. Go to the repository on GitHub and click **Code → Download ZIP**
+2. Extract the ZIP file to a folder on your computer
+3. Open Chrome and navigate to `chrome://extensions`
+4. Enable **Developer mode** (toggle, top-right)
+5. Click **Load unpacked**
+6. Select the extracted folder (the one containing `manifest.json`)
+7. LAVA will appear in your extensions bar
 
 ---
 
