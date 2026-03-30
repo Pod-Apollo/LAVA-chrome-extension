@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LAVA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Red+Hat+Mono:ital,wght@0,300..700;1,300..700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+
+  <div id="app-layout">
+    <!-- ══ SIDEBAR ══════════════════════════════════════════ -->
+    <nav id="sidebar" aria-label="Main">
+      <button id="btn-sidebar-toggle" aria-label="Navigation" aria-expanded="true">
+        <i data-lucide="arrow-left-to-line" class="icon-when-expanded" aria-hidden="true"></i>
+        <i data-lucide="arrow-right-from-line" class="icon-when-collapsed" aria-hidden="true"></i>
+      </button>
+      <button id="tab-projects" class="tab-btn tab-active" role="tab" aria-selected="true"
+        aria-controls="panel-projects" data-tab="projects">
+        <i data-lucide="panels-top-left" aria-hidden="true"></i>
+        <span class="tab-label">Projects</span>
+      </button>
+      <div id="dynamic-tabs"></div>
+    </nav>
+
+    <!-- ══ CONTENT ═══════════════════════════════════════════ -->
+    <div id="content-area">
+
+      <!-- ── PANEL: PROJECTS ──────────────────────────────── -->
+      <div id="panel-projects" class="panel panel-active" role="tabpanel" aria-labelledby="tab-projects">
+
+        <nav class="panel-breadcrumb bc-inactive" id="bc-projects" aria-label="Projects breadcrumb">
+          <button class="bc-back-btn" id="bc-back-projects">
+            <i data-lucide="chevron-left" aria-hidden="true"></i>
+            Projects
+          </button>
+          <span class="bc-sep" aria-hidden="true">/</span>
+          <span class="bc-current" aria-current="page">New Project</span>
+        </nav>
+
+        <!-- Subview: Home -->
+        <div id="view-home" class="subview subview-active">
+          <div class="view-toolbar">
+            <h2 class="view-title">Projects</h2>
+            <button id="btn-new-project" class="btn btn-secondary btn-icon btn-icon-left">
+              <span aria-hidden="true" class="icon">
+                <i data-lucide="plus"></i>
+              </span>
+              <span>New Project</span>
+            </button>
+          </div>
+          <div id="projects-list"></div>
+          <p id="no-projects" class="empty-state hidden">No projects yet. Create one to get started.</p>
+        </div>
+
+        <!-- Subview: New Project -->
+        <div id="view-new-project" class="subview">
+          <div class="view-toolbar">
+            <h2 class="view-title">New Project</h2>
+          </div>
+          <form id="form-new-project" autocomplete="off" class="form-section">
+            <div class="field">
+              <label for="proj-name">Project Name <span class="req">(required)</span></label>
+              <input type="text" id="proj-name" required>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn btn-tertiary">Create Project</button>
+              <button type="button" id="btn-cancel-new-project" class="btn">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+      </div><!-- /panel-projects -->
+
+      <!-- ── PANEL: PROJECT ────────────────────────────────── -->
+      <div id="panel-project" class="panel" role="tabpanel">
+
+        <nav class="panel-breadcrumb bc-inactive" id="bc-project-panel" aria-label="Project breadcrumb">
+          <button class="bc-back-btn" id="bc-back-project">
+            <i data-lucide="chevron-left" aria-hidden="true"></i>
+            <span id="bc-back-project-label">Project</span>
+          </button>
+          <span class="bc-sep" aria-hidden="true">/</span>
+          <span class="bc-current" id="bc-project-leaf"></span>
+        </nav>
+
+        <!-- ════ VIEW: PROJECT DASHBOARD ════ -->
+        <div id="view-project" class="subview subview-active">
+          <div class="view-toolbar">
+            <div class="project-actions-left">
+              <button id="btn-import-findings" class="btn  btn-icon-left">
+                <span class="icon" aria-hidden="true">
+                  <i data-lucide="plus"></i>
+                </span>
+                <span>Import Findings</span>
+              </button>
+            </div>
+            <button id="btn-delete-project" class="btn btn-danger btn-icon btn-icon-left" aria-label="Delete project">
+              <span class="icon" aria-hidden="true">
+                <i data-lucide="trash-2"></i>
+              </span>
+              <span>Delete</span>
+            </button>
+          </div>
+
+          <div id="project-info-bar">
+            <h2 id="project-heading" class="view-title"></h2>
+            <div id="progress-wrap">
+              <div id="progress-bar-track">
+                <div id="progress-bar-fill"></div>
+              </div>
+              <span id="progress-label"></span>
+            </div>
+          </div>
+
+          <div id="findings-table-wrap" class="hide-scrollbar">
+            <p id="no-findings" class="empty-state hidden">No findings yet. Import some to get started.</p>
+            <table id="findings-table" class="hidden">
+              <thead>
+                <tr>
+                  <th class="col-num">#</th>
+                  <th class="col-finding">Finding</th>
+                  <th class="col-status">Status</th>
+                  <th class="col-task">Task</th>
+                  <th class="col-internal hidden" id="col-internal-head">Internal</th>
+                  <th class="col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="findings-tbody"></tbody>
+            </table>
+          </div>
+
+          <div id="table-output-wrap" class="form-section">
+            <div class="section-header-row">
+              <h3 class="section-title">Delivery Table</h3>
+              <div class="btn-row">
+                <button id="btn-copy-md" class="btn">
+                  Copy Table
+                </button>
+                <button id="btn-download-excel" class="btn btn-icon btn-icon-left">
+                  <span class="icon" aria-hidden="true">
+                    <i data-lucide="download"></i>
+                  </span>
+                  <span>Excel</span>
+                </button>
+              </div>
+            </div>
+            <div class="hr"></div>
+            <textarea id="md-output" readonly spellcheck="false" rows="6"></textarea>
+            <p class="tip">Paste this directly into your delivery message.</p>
+          </div>
+        </div><!-- /view-project -->
+
+        <!-- ════ VIEW: IMPORT FINDINGS ════ -->
+        <div id="view-import" class="subview">
+          <div>
+            <h2 class="view-title">Import Findings</h2>
+            <p class="view-description">Paste a list below — plain IDs, linked text, or bare URLs all work. Or add manually one at a time.</p>
+          </div>
+
+          <section class="form-section">
+            <div class="field">
+              <label for="an-id" id="paste-area-label" class="section-title">Paste findings</label>
+              <div id="import-paste-area" contenteditable="true" class="paste-area" spellcheck="false"
+                role="textbox" aria-labelledby="paste-area-label" data-placeholder="Paste your findings here… (IDs, links, or linked text)"></div>
+            </div>
+            <div class="btn-row">
+              <button id="btn-parse-paste" class="btn btn-tertiary">Parse &amp; Preview</button>
+              <button id="btn-clear-paste" class="btn">Clear</button>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <fieldset class="field">
+              <legend class="section-title">Add manually</legend>
+              <div class="manual-row">
+                <div class="field">
+                  <label for="manual-id">Finding ID</label>
+                  <input type="text" id="manual-id" class="input-flex">
+                </div>
+                <div class="field">
+                  <label for="manual-url">URL</label>
+                  <input type="url" id="manual-url" class="input-flex">
+                </div>
+                <button id="btn-add-manual" class="btn">Add</button>
+              </div>
+            </fieldset>
+          </section>
+
+          <div id="import-preview" class="hidden">
+            <div class="section-header-row">
+              <h3 class="section-title">Preview <span id="import-count" class="badge"></span></h3>
+              <button id="btn-clear-import" class="btn btn-danger">Clear all</button>
+            </div>
+            <div id="import-preview-wrap" class="hide-scrollbar">
+            <table class="import-preview-table">
+              <thead>
+                <tr>
+                  <th scope="col">Finding ID</th>
+                  <th scope="col">URL</th>
+                  <th scope="col">Remove</th>
+                </tr>
+              </thead>
+              <tbody id="import-list"></tbody>
+            </table>
+            </div>
+            <div class="btn-row">
+              <button id="btn-save-import" class="btn btn-tertiary">Save to Project</button>
+              <button id="btn-cancel-import" class="btn">Cancel</button>
+            </div>
+          </div>
+        </div><!-- /view-import -->
+
+        <!-- ════ VIEW: VALIDATION ════ -->
+        <div id="view-validation" class="subview">
+
+          <div class="view-toolbar">
+            <h2 class="view-title" id="validation-heading">Validate Finding</h2>
+          </div>
+
+          <!-- Pulled from page -->
+          <section class="form-section">
+            <div class="section-header-row">
+              <h3 class="section-title">Page Data</h3>
+              <div class="btn-row">
+                <button id="btn-open-finding" class="btn btn-icon btn-icon-right" disabled>
+                  <span>Open in Browser</span>
+                  <span class="icon" aria-hidden="true">
+                    <i data-lucide="external-link"></i>
+                  </span>
+                </button>
+                <button id="btn-pull-page" class="btn btn-secondary">Pull from Page</button>
+              </div>
+            </div>
+            <div class="hr"></div>
+            <div class="pulled-grid">
+              <div class="field">
+                <label>Finding ID</label>
+                <input type="text" id="pulled-finding-id">
+              </div>
+              <div class="field">
+                <label>Task ID</label>
+                <input type="text" id="pulled-task-id">
+              </div>
+              <div class="field field-full">
+                <label>Environment URL</label>
+                <input type="text" id="pulled-environment">
+              </div>
+            </div>
+          </section>
+
+          <!-- Manual input -->
+          <section class="form-section">
+            <h3 class="section-title">Validation Details</h3>
+            <div class="hr"></div>
+            <div class="field-row-2">
+              <div class="field">
+                <label for="val-id-base">Finding ID Base</label>
+                <input type="text" id="val-id-base">
+              </div>
+              <div class="field">
+                <label for="val-id-number">Number</label>
+                <input type="number" id="val-id-number" min="1">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="val-status">Status</label>
+              <select id="val-status">
+                <option value="">— Select status —</option>
+                <option value="Fixed">Fixed</option>
+                <option value="Partially Fixed">Partially Fixed</option>
+                <option value="Not Fixed">Not Fixed</option>
+                <option value="Not Reproducible">Not Reproducible</option>
+                <option value="Cannot Be Fixed">Cannot Be Fixed</option>
+                <option value="Dismissed">Dismissed</option>
+              </select>
+            </div>
+
+            <div class="field hidden" id="field-internal-tracking">
+              <label for="val-internal-url">Client Internal Tracking URL</label>
+              <input type="url" id="val-internal-url" aria-describedby="internal-tracking-hint"
+                placeholder="https://...">
+              <p class="field-hint" id="internal-tracking-hint">Required for dismissed findings — used to track
+                associated task deletion.</p>
+            </div>
+
+            <fieldset class="tools-fieldset">
+              <legend>Testing Tools</legend>
+              <div class="tools-grid">
+                <label class="tool-check"><input type="checkbox" name="tools" value="VoiceOver"> VoiceOver</label>
+                <label class="tool-check"><input type="checkbox" name="tools" value="TalkBack"> TalkBack</label>
+                <label class="tool-check"><input type="checkbox" name="tools" value="Custom Text Spacing"> Custom Text
+                  Spacing</label>
+                <label class="tool-check"><input type="checkbox" name="tools" value="Manual Inspection"> Manual
+                  Inspection</label>
+                <label class="tool-check"><input type="checkbox" name="tools" value="NVDA"> NVDA</label>
+                <label class="tool-check"><input type="checkbox" name="tools" value="Browser Developer Tools"> Dev
+                  Tools</label>
+                <label class="tool-check"><input type="checkbox" name="tools" value="Keyboard"> Keyboard</label>
+                <label class="tool-check"><input type="checkbox" name="tools" value="Color Contrast Checker"> Contrast
+                  Checker</label>
+              </div>
+            </fieldset>
+
+            <div class="field">
+              <label for="val-comment">Validation Comment</label>
+              <textarea id="val-comment" spellcheck="true" rows="4"
+                placeholder="Describe your validation findings…"></textarea>
+            </div>
+          </section>
+
+          <div>
+            <button id="btn-update-output" class="btn btn-tertiary btn-full btn-icon">
+              <span>Update Output</span>
+              <span class="icon">
+                <i data-lucide="chevrons-down" aria-hidden="true"></i>
+              </span>
+            </button>
+            <!-- Output -->
+            <section class="form-section" id="val-output-section">
+              <h3 class="section-title">Output</h3>
+              <div class="output-block">
+                <div class="field">
+                  <label for="val-screenshot-name">Screenshot Name</label>
+                  <div class="output-row">
+                    <input type="text" id="val-screenshot-name" class="output-input" readonly>
+                    <button id="btn-copy-screenshot" class="btn" aria-label="Copy screenshot name">
+                      <i data-lucide="copy" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="output-block">
+                <div class="field">
+                  <label for="val-finding-comment">Finding Comment</label>
+                  <textarea id="val-finding-comment" class="output-textarea" rows="7" readonly></textarea>
+                </div>
+                <div class="btn-row">
+                  <button id="btn-copy-finding" class="btn" aria-label="Copy finding comment">
+                    <i data-lucide="copy" aria-hidden="true"></i>
+                  </button>
+                  <button id="btn-inject-finding" class="btn  btn-icon btn-icon-right">
+                    <span>Inject into Finding page</span>
+                    <span class="icon">
+                      <i data-lucide="arrow-right" aria-hidden="true"></i>
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div class="output-block">
+                <div class="field">
+                  <label for="val-task-comment">Task Comment</label>
+                  <textarea id="val-task-comment" class="output-textarea" rows="7" readonly></textarea>
+                </div>
+                <div class="btn-row">
+                  <button id="btn-copy-task" class="btn" aria-label="Copy task comment">
+                    <i data-lucide="copy" aria-hidden="true"></i>
+                  </button>
+                  <button id="btn-inject-task" class="btn btn-icon btn-icon-right">
+                    <span>Inject into Task page</span>
+                    <span class="icon">
+                      <i data-lucide="arrow-right" aria-hidden="true"></i>
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <button id="btn-save-to-table" class="btn btn-tertiary btn-full btn-icon">
+                <span>Save &amp; Mark Complete</span>
+                <span class="icon">
+                  <i data-lucide="check" aria-hidden="true"></i>
+                </span>
+              </button>
+            </section>
+          </div>
+
+          <button id="btn-next-finding" class="btn btn-full btn-icon">
+            <span>Next Finding</span>
+            <span class="icon">
+              <i data-lucide="arrow-right" aria-hidden="true"></i>
+            </span>
+          </button>
+
+        </div><!-- /view-validation -->
+
+      </div><!-- /panel-project -->
+
+    </div><!-- /content-area -->
+  </div><!-- /app-layout -->
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="icons/lucide.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+
+</html>

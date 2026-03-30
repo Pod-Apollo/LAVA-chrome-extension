@@ -1,0 +1,14 @@
+{
+  "manifest_version": 2,
+  "name": "LAVA — Level Access Validation Assistant",
+  "version": "2.0.0",
+  "description": "Manage accessibility validation projects end-to-end: import findings, validate, generate reports.",
+  "permissions": ["storage", "activeTab", "scripting", "tabs", "windows"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "LAVA"
+  }
+}
