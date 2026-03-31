@@ -938,8 +938,9 @@ async function injectIntoPage(selector, text, successMsg) {
         const el = document.querySelector(sel);
         if (!el) return { ok: false, error: `Element not found: ${sel}` };
         el.focus();
-        el.value = txt;
-        // Trigger Angular/framework change detection
+        // Use native setter so Angular's change detection picks up the new value
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+        nativeSetter.call(el, txt);
         el.dispatchEvent(new Event("input",  { bubbles: true }));
         el.dispatchEvent(new Event("change", { bubbles: true }));
         return { ok: true };
