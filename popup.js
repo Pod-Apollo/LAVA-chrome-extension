@@ -117,7 +117,10 @@ function activateTab(tabId) {
   activeTabId = tabId;
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.toggle('tab-active', btn.dataset.tab === tabId);
+    const isActive = btn.dataset.tab === tabId;
+    btn.classList.toggle('tab-active', isActive);
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    btn.setAttribute('tabindex', isActive ? '0' : '-1');
   });
 
   const panelKey = tabId === 'projects' ? 'projects' : 'project';
@@ -135,23 +138,15 @@ function ensureProjectTab(id, name) {
   btn.setAttribute('role', 'tab');
   btn.setAttribute('aria-selected', 'false');
   btn.setAttribute('aria-controls', 'panel-project');
-  btn.innerHTML = `<i data-lucide="circle-check-big" class="tab-icon" aria-hidden="true"></i><span class="tab-label">${esc(name)}</span><span class="tab-close" aria-label="Close ${esc(name)} tab" title="Close tab" role="img"><i data-lucide="x" aria-hidden="true"></i></span>`;
+  btn.setAttribute('tabindex', '-1');
+  btn.innerHTML = `<i data-lucide="circle-check-big" class="tab-icon" aria-hidden="true"></i><span class="tab-label">${esc(name)}</span>`;
   btn.addEventListener('click', async () => {
     currentProjectId = id;
     tabSubView[id] = 'view-project';
     await renderProject();
     activateTab(id);
   });
-  btn.querySelector('.tab-close').addEventListener('click', async e => {
-    e.stopPropagation();
-    removeProjectTab(id);
-    if (activeTabId === id) {
-      tabSubView.projects = 'view-home';
-      await renderHome();
-      activateTab('projects');
-    }
-  });
-  document.getElementById('dynamic-tabs').appendChild(btn);
+  document.getElementById('tablist-sidebar').appendChild(btn);
   lucide.createIcons();
 }
 
@@ -235,6 +230,46 @@ document.getElementById("tab-projects").addEventListener("click", async () => {
   tabSubView.projects = "view-home";
   await renderHome();
   activateTab("projects");
+});
+
+// ── TABLIST KEYBOARD NAVIGATION (roving tabindex) ─────────
+document.getElementById("tablist-sidebar").addEventListener("keydown", async e => {
+  const tabs = Array.from(document.querySelectorAll('#tablist-sidebar [role="tab"]'));
+  const currentIndex = tabs.findIndex(t => t === document.activeElement);
+  if (currentIndex === -1) return;
+
+  let targetIndex = -1;
+
+  if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+    e.preventDefault();
+    targetIndex = (currentIndex + 1) % tabs.length;
+  } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+    e.preventDefault();
+    targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  } else if (e.key === "Home") {
+    e.preventDefault();
+    targetIndex = 0;
+  } else if (e.key === "End") {
+    e.preventDefault();
+    targetIndex = tabs.length - 1;
+  }
+
+  if (targetIndex === -1) return;
+
+  const target = tabs[targetIndex];
+  const tabId = target.dataset.tab;
+
+  // Auto-activate on focus (per spec OQ-01)
+  if (tabId === 'projects') {
+    tabSubView.projects = tabSubView.projects || 'view-home';
+    await renderHome();
+  } else {
+    currentProjectId = tabId;
+    tabSubView[tabId] = tabSubView[tabId] || 'view-project';
+    await renderProject();
+  }
+  activateTab(tabId);
+  target.focus();
 });
 
 document.getElementById("bc-back-projects").addEventListener("click", async () => {

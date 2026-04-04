@@ -22,12 +22,14 @@
         <i data-lucide="arrow-left-to-line" class="icon-when-expanded" aria-hidden="true"></i>
         <i data-lucide="arrow-right-from-line" class="icon-when-collapsed" aria-hidden="true"></i>
       </button>
-      <button id="tab-projects" class="tab-btn tab-active" role="tab" aria-selected="true"
-        aria-controls="panel-projects" data-tab="projects">
-        <i data-lucide="panels-top-left" aria-hidden="true"></i>
-        <span class="tab-label">Projects</span>
-      </button>
-      <div id="dynamic-tabs"></div>
+
+      <div id="tablist-sidebar" role="tablist" aria-label="Open projects" aria-orientation="vertical">
+        <button id="tab-projects" class="tab-btn tab-active" role="tab" aria-selected="true"
+          aria-controls="panel-projects" data-tab="projects" tabindex="0">
+          <i data-lucide="panels-top-left" aria-hidden="true"></i>
+          <span class="tab-label">Projects</span>
+        </button>
+      </div>
     </nav>
 
     <!-- ══ CONTENT ═══════════════════════════════════════════ -->
@@ -167,7 +169,7 @@
 
           <section class="form-section">
             <div class="field">
-              <label for="an-id" id="paste-area-label" class="section-title">Paste findings</label>
+              <label id="paste-area-label" class="section-title">Paste findings</label>
               <div id="import-paste-area" contenteditable="true" class="paste-area" spellcheck="false"
                 role="textbox" aria-labelledby="paste-area-label" data-placeholder="Paste your findings here… (IDs, links, or linked text)"></div>
             </div>
@@ -242,15 +244,15 @@
             <div class="hr"></div>
             <div class="pulled-grid">
               <div class="field">
-                <label>Finding ID</label>
+                <label for="pulled-finding-id">Finding ID</label>
                 <input type="text" id="pulled-finding-id">
               </div>
               <div class="field">
-                <label>Task ID</label>
+                <label for="pulled-task-id">Task ID</label>
                 <input type="text" id="pulled-task-id">
               </div>
               <div class="field field-full">
-                <label>Environment URL</label>
+                <label for="pulled-environment">Environment URL</label>
                 <input type="text" id="pulled-environment">
               </div>
             </div>

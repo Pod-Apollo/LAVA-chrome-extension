@@ -316,28 +316,6 @@ a:focus-visible {
   width: 0;
 }
 
-.tab-close {
-  flex-shrink: 0;
-  opacity: 0;
-  line-height: 1;
-  padding: 0 2px;
-  margin-left: 2px;
-  transition: opacity 0.15s;
-}
-
-.tab-btn:hover .tab-close {
-  opacity: 0.55;
-}
-
-.tab-close:hover,
-.tab-close:focus {
-  opacity: 1 !important;
-}
-
-#sidebar.collapsed .tab-close {
-  display: none;
-}
-
 /* ── Content area ────────────────────────────────────────── */
 #content-area {
   flex: 1;
