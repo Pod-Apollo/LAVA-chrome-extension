@@ -712,10 +712,19 @@ function resetValidationForm() {
 }
 
 // Status select → show/hide dismissed field + pre-fill comment template
-document.getElementById("val-status").addEventListener("change", e => {
+document.getElementById("val-status").addEventListener("change", async e => {
   const status = e.target.value;
   toggleDismissedField(status === "Dismissed");
   prefillComment(status);
+
+  if (!status) return;
+
+  try {
+    await syncSelectedStatusToPage(status);
+    toast(`✓ Page status set to ${status}`, "success");
+  } catch (err) {
+    toast(err.message || "Could not update page status", "error");
+  }
 });
 
 const COMMENT_TEMPLATES = {
@@ -753,7 +762,84 @@ function prefillComment(status) {
 function toggleDismissedField(show) {
   document.getElementById("field-internal-tracking").classList.toggle("hidden", !show);
 }
+async function syncSelectedStatusToPage(statusLabel) {
+  const project = currentProjectId ? await getProject(currentProjectId) : null;
+  const finding = project?.findings.find(f => f.id === currentFindingId) || null;
+  const tab = await getActivePageTab(finding?.findingUrl || null);
 
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: applyFindingStatusOnPage,
+    args: [statusLabel],
+  });
+
+  const result = results?.[0]?.result;
+  if (!result?.ok) {
+    throw new Error(result?.error || "Could not update the finding status on the page.");
+  }
+}
+
+function applyFindingStatusOnPage(statusLabel) {
+  const STATUS_MAP = {
+    "To Review": "toReview",
+    "Open": "open",
+    "Fixed": "fixed",
+    "Partially Fixed": "partiallyFixed",
+    "Not Fixed": "notFixed",
+    "Not Reproducible": "notReproducible",
+    "Cannot Be Fixed": "cannotBeFixed",
+    "Dismissed": "dismissed",
+  };
+
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  const findStatusOption = statusValue => Array.from(
+    document.querySelectorAll('#statusBox .dropdown-item[data-status]')
+  ).find(btn => btn.dataset.status === statusValue);
+
+  return (async () => {
+    try {
+      const targetStatus = STATUS_MAP[statusLabel];
+      if (!targetStatus) {
+        return { ok: false, error: `Unsupported status: ${statusLabel}` };
+      }
+
+      const dropdownButton = document.querySelector('#statusBox [ngbdropdowntoggle], #statusBox .dropdown-toggle');
+      if (!dropdownButton) {
+        return { ok: false, error: 'Could not find the finding status dropdown on the page.' };
+      }
+
+      dropdownButton.click();
+
+      let option = null;
+      for (let i = 0; i < 10; i++) {
+        option = findStatusOption(targetStatus);
+        if (option) break;
+        await wait(100);
+      }
+
+      if (!option) {
+        return { ok: false, error: `Status option "${statusLabel}" was not found on the page.` };
+      }
+
+      if (targetStatus === "dismissed" && option.disabled) {
+        return {
+          ok: false,
+          error: "Dismissed is currently disabled. Please update the task first and remove it, then try again."
+        };
+      }
+
+      if (option.disabled) {
+        return { ok: false, error: `Status option "${statusLabel}" is currently disabled.` };
+      }
+
+      option.click();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Could not update the finding status on the page." };
+    }
+  })();
+}
 
 // ── TAB HELPER ───────────────────────────────────────────
 // Finds the tab for the current finding by URL, or falls back to the
