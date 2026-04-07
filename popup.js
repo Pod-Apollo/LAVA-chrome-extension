@@ -672,13 +672,6 @@ async function openValidation(findingId) {
     document.getElementById("pulled-task-id").value    = finding.taskId || "";
     document.getElementById("pulled-environment").value= finding.environment || "";
 
-    // Split finding ID into base + number for screenshot name generation
-    const match = (finding.findingId || "").match(/^(.*?)(\d+)$/);
-    if (match) {
-      document.getElementById("val-id-base").value   = match[1];
-      document.getElementById("val-id-number").value = match[2];
-    }
-
     // Pre-select status if already set
     if (finding.status) {
       document.getElementById("val-status").value = finding.status;
@@ -705,8 +698,7 @@ function resetValidationForm() {
   document.getElementById("pulled-finding-id").value = "";
   document.getElementById("pulled-task-id").value    = "";
   document.getElementById("pulled-environment").value= "";
-  document.getElementById("val-id-base").value = "";
-  document.getElementById("val-id-number").value = "";
+  clearFindingIdError();
   document.getElementById("val-status").value = "";
   document.getElementById("val-internal-url").value = "";
   document.getElementById("val-comment").value = "";
@@ -807,12 +799,6 @@ document.getElementById("btn-pull-page").addEventListener("click", async () => {
     // Populate pulled fields
     if (data.findingId) {
       document.getElementById("pulled-finding-id").value = data.findingId;
-      // Auto-split into base + number for screenshot name
-      const match = data.findingId.match(/^(.*?)(\d+)$/);
-      if (match) {
-        if (!document.getElementById("val-id-base").value)   document.getElementById("val-id-base").value   = match[1];
-        if (!document.getElementById("val-id-number").value) document.getElementById("val-id-number").value = match[2];
-      }
     }
     if (data.taskId)   document.getElementById("pulled-task-id").value = data.taskId;
     if (data.envUrl)   document.getElementById("pulled-environment").value = data.envUrl;
@@ -881,8 +867,14 @@ function scrapeFindingPage() {
 
 // ── UPDATE OUTPUT ─────────────────────────────────────────
 document.getElementById("btn-update-output").addEventListener("click", () => {
-  const idBase   = document.getElementById("val-id-base").value.trim();
-  const idNum    = document.getElementById("val-id-number").value.trim();
+  const rawFindingId = document.getElementById("pulled-finding-id").value.trim();
+
+  if (!rawFindingId) {
+    showFindingIdError();
+    return;
+  }
+  clearFindingIdError();
+
   const status   = document.getElementById("val-status").value;
   const env      = document.getElementById("pulled-environment").value.trim();
   const comment  = document.getElementById("val-comment").value.trim();
@@ -890,7 +882,7 @@ document.getElementById("btn-update-output").addEventListener("click", () => {
 
   if (!status) { toast("Select a status first", "error"); return; }
 
-  const screenshotName = buildScreenshotName(idBase, idNum, status);
+  const screenshotName = buildScreenshotName(rawFindingId, status);
   const findingComment = buildFindingComment({ env, status, screenshotName, tools, comment });
   const taskComment    = buildTaskComment({ env, status, screenshotName, tools, comment });
 
@@ -900,17 +892,50 @@ document.getElementById("btn-update-output").addEventListener("click", () => {
   document.getElementById("val-output-section").classList.remove("hidden");
 });
 
-function buildScreenshotName(base, num, status) {
+function buildScreenshotName(findingId, status) {
   const dateStr = (() => {
     const d = new Date();
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return m + day + d.getFullYear();
   })();
-  const cleanBase = base.replaceAll("–", "-").replaceAll("—", "-");
+  // Normalize en-dash and em-dash before splitting
+  const normalized = findingId
+    .replaceAll("–", "-")
+    .replaceAll("—", "-");
+  // Split trailing digits from base
+  const match = normalized.match(/^(.*?)(\d+)$/);
+  const base = match ? match[1] : normalized;
+  const num  = match ? match[2] : "";
   const cleanStatus = status.replace(/ /g, "_");
-  return `${cleanBase}${num}_${dateStr}_${cleanStatus}`;
+  return `${base}${num}_${dateStr}_${cleanStatus}`;
 }
+
+function showFindingIdError() {
+  const input   = document.getElementById("pulled-finding-id");
+  const errorEl = document.getElementById("pulled-finding-id-error");
+  input.setAttribute("aria-invalid", "true");
+  errorEl.removeAttribute("aria-hidden");
+  errorEl.innerHTML =
+    '<i data-lucide="circle-alert" role="img" aria-label="error:" class="icon-error"></i>'
+    + ' Finding ID cannot be empty.';
+  lucide.createIcons();
+  input.focus();
+}
+
+function clearFindingIdError() {
+  const input   = document.getElementById("pulled-finding-id");
+  const errorEl = document.getElementById("pulled-finding-id-error");
+  input.setAttribute("aria-invalid", "false");
+  errorEl.setAttribute("aria-hidden", "true");
+  errorEl.innerHTML = "";
+}
+
+document.getElementById("pulled-finding-id").addEventListener("input", () => {
+  if (document.getElementById("pulled-finding-id").value.trim()) {
+    clearFindingIdError();
+  }
+});
 
 function stripBackticks(text) {
   return text.replace(/`/g, "");
