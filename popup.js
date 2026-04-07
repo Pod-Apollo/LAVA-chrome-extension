@@ -362,7 +362,6 @@ async function renderProject() {
         ? `<td>${f.internalTracking ? `<a href="${esc(f.internalTracking)}" target="_blank">Link</a>` : "—"}</td>`
         : "";
 
-
       tr.innerHTML = `
         <td class="col-num">${i + 1}</td>
         <td>${findingCell}</td>
@@ -708,23 +707,13 @@ function resetValidationForm() {
   document.getElementById("field-internal-tracking").classList.add("hidden");
   document.getElementById("btn-open-finding").disabled = true;
   document.querySelectorAll("input[name='tools']").forEach(c => c.checked = false);
-
 }
 
 // Status select → show/hide dismissed field + pre-fill comment template
-document.getElementById("val-status").addEventListener("change", async e => {
+document.getElementById("val-status").addEventListener("change", e => {
   const status = e.target.value;
   toggleDismissedField(status === "Dismissed");
   prefillComment(status);
-
-  if (!status) return;
-
-  try {
-    await syncSelectedStatusToPage(status);
-    toast(`✓ Page status set to ${status}`, "success");
-  } catch (err) {
-    toast(err.message || "Could not update page status", "error");
-  }
 });
 
 const COMMENT_TEMPLATES = {
@@ -762,6 +751,7 @@ function prefillComment(status) {
 function toggleDismissedField(show) {
   document.getElementById("field-internal-tracking").classList.toggle("hidden", !show);
 }
+
 async function syncSelectedStatusToPage(statusLabel) {
   const project = currentProjectId ? await getProject(currentProjectId) : null;
   const finding = project?.findings.find(f => f.id === currentFindingId) || null;
@@ -806,7 +796,7 @@ function applyFindingStatusOnPage(statusLabel) {
 
       const dropdownButton = document.querySelector('#statusBox [ngbdropdowntoggle], #statusBox .dropdown-toggle');
       if (!dropdownButton) {
-        return { ok: false, error: 'Could not find the finding status dropdown on the page.' };
+        return { ok: false, error: "Could not find the finding status dropdown on the page." };
       }
 
       dropdownButton.click();
@@ -825,7 +815,7 @@ function applyFindingStatusOnPage(statusLabel) {
       if (targetStatus === "dismissed" && option.disabled) {
         return {
           ok: false,
-          error: "Dismissed is currently disabled. Please update the task first and remove it, then try again."
+          error: "Dismissed is currently disabled. Please update the task first, then try again."
         };
       }
 
@@ -952,7 +942,7 @@ function scrapeFindingPage() {
 }
 
 // ── UPDATE OUTPUT ─────────────────────────────────────────
-document.getElementById("btn-update-output").addEventListener("click", () => {
+document.getElementById("btn-update-output").addEventListener("click", async () => {
   const rawFindingId = document.getElementById("pulled-finding-id").value.trim();
 
   if (!rawFindingId) {
@@ -966,7 +956,17 @@ document.getElementById("btn-update-output").addEventListener("click", () => {
   const comment  = document.getElementById("val-comment").value.trim();
   const tools    = [...document.querySelectorAll("input[name='tools']:checked")].map(c => c.value);
 
-  if (!status) { toast("Select a status first", "error"); return; }
+  if (!status) {
+    toast("Select a status first", "error");
+    return;
+  }
+
+  try {
+    await syncSelectedStatusToPage(status);
+  } catch (err) {
+    toast(err.message || "Could not update page status", "error");
+    return;
+  }
 
   const screenshotName = buildScreenshotName(rawFindingId, status);
   const findingComment = buildFindingComment({ env, status, screenshotName, tools, comment });
@@ -976,6 +976,8 @@ document.getElementById("btn-update-output").addEventListener("click", () => {
   document.getElementById("val-finding-comment").value  = findingComment;
   document.getElementById("val-task-comment").value     = taskComment;
   document.getElementById("val-output-section").classList.remove("hidden");
+
+  toast(`✓ Output updated and page status set to ${status}`, "success");
 });
 
 function buildScreenshotName(findingId, status) {
