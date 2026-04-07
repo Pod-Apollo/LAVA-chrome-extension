@@ -362,7 +362,6 @@ async function renderProject() {
         ? `<td>${f.internalTracking ? `<a href="${esc(f.internalTracking)}" target="_blank">Link</a>` : "—"}</td>`
         : "";
 
-
       tr.innerHTML = `
         <td class="col-num">${i + 1}</td>
         <td>${findingCell}</td>
@@ -708,7 +707,6 @@ function resetValidationForm() {
   document.getElementById("field-internal-tracking").classList.add("hidden");
   document.getElementById("btn-open-finding").disabled = true;
   document.querySelectorAll("input[name='tools']").forEach(c => c.checked = false);
-
 }
 
 // Status select → show/hide dismissed field + pre-fill comment template
@@ -754,6 +752,84 @@ function toggleDismissedField(show) {
   document.getElementById("field-internal-tracking").classList.toggle("hidden", !show);
 }
 
+async function syncSelectedStatusToPage(statusLabel) {
+  const project = currentProjectId ? await getProject(currentProjectId) : null;
+  const finding = project?.findings.find(f => f.id === currentFindingId) || null;
+  const tab = await getActivePageTab(finding?.findingUrl || null);
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: applyFindingStatusOnPage,
+    args: [statusLabel],
+  });
+
+  const result = results?.[0]?.result;
+  if (!result?.ok) {
+    throw new Error(result?.error || "Could not update the finding status on the page.");
+  }
+}
+
+function applyFindingStatusOnPage(statusLabel) {
+  const STATUS_MAP = {
+    "To Review": "toReview",
+    "Open": "open",
+    "Fixed": "fixed",
+    "Partially Fixed": "partiallyFixed",
+    "Not Fixed": "notFixed",
+    "Not Reproducible": "notReproducible",
+    "Cannot Be Fixed": "cannotBeFixed",
+    "Dismissed": "dismissed",
+  };
+
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  const findStatusOption = statusValue => Array.from(
+    document.querySelectorAll('#statusBox .dropdown-item[data-status]')
+  ).find(btn => btn.dataset.status === statusValue);
+
+  return (async () => {
+    try {
+      const targetStatus = STATUS_MAP[statusLabel];
+      if (!targetStatus) {
+        return { ok: false, error: `Unsupported status: ${statusLabel}` };
+      }
+
+      const dropdownButton = document.querySelector('#statusBox [ngbdropdowntoggle], #statusBox .dropdown-toggle');
+      if (!dropdownButton) {
+        return { ok: false, error: "Could not find the finding status dropdown on the page." };
+      }
+
+      dropdownButton.click();
+
+      let option = null;
+      for (let i = 0; i < 10; i++) {
+        option = findStatusOption(targetStatus);
+        if (option) break;
+        await wait(100);
+      }
+
+      if (!option) {
+        return { ok: false, error: `Status option "${statusLabel}" was not found on the page.` };
+      }
+
+      if (targetStatus === "dismissed" && option.disabled) {
+        return {
+          ok: false,
+          error: "Dismissed is currently disabled. Please update the task first, then try again."
+        };
+      }
+
+      if (option.disabled) {
+        return { ok: false, error: `Status option "${statusLabel}" is currently disabled.` };
+      }
+
+      option.click();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Could not update the finding status on the page." };
+    }
+  })();
+}
 
 // ── TAB HELPER ───────────────────────────────────────────
 // Finds the tab for the current finding by URL, or falls back to the
@@ -866,7 +942,7 @@ function scrapeFindingPage() {
 }
 
 // ── UPDATE OUTPUT ─────────────────────────────────────────
-document.getElementById("btn-update-output").addEventListener("click", () => {
+document.getElementById("btn-update-output").addEventListener("click", async () => {
   const rawFindingId = document.getElementById("pulled-finding-id").value.trim();
 
   if (!rawFindingId) {
@@ -880,7 +956,17 @@ document.getElementById("btn-update-output").addEventListener("click", () => {
   const comment  = document.getElementById("val-comment").value.trim();
   const tools    = [...document.querySelectorAll("input[name='tools']:checked")].map(c => c.value);
 
-  if (!status) { toast("Select a status first", "error"); return; }
+  if (!status) {
+    toast("Select a status first", "error");
+    return;
+  }
+
+  try {
+    await syncSelectedStatusToPage(status);
+  } catch (err) {
+    toast(err.message || "Could not update page status", "error");
+    return;
+  }
 
   const screenshotName = buildScreenshotName(rawFindingId, status);
   const findingComment = buildFindingComment({ env, status, screenshotName, tools, comment });
@@ -890,6 +976,8 @@ document.getElementById("btn-update-output").addEventListener("click", () => {
   document.getElementById("val-finding-comment").value  = findingComment;
   document.getElementById("val-task-comment").value     = taskComment;
   document.getElementById("val-output-section").classList.remove("hidden");
+
+  toast(`✓ Output updated and page status set to ${status}`, "success");
 });
 
 function buildScreenshotName(findingId, status) {
