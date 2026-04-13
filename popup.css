@@ -721,6 +721,51 @@ h3.section-title:has(+ .btn-row) {
 .toast.success { background: var(--clr-feedback-success-700); }
 .toast.error   { background: var(--clr-feedback-danger-700); }
 
+/* ══════════════════════════════════════════════════════════
+   4b. DIALOGS
+══════════════════════════════════════════════════════════ */
+
+dialog::backdrop {
+  background: hsla(236, 18%, 15%, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+dialog {
+  background: var(--clr-neutral-50);
+  border: 1px solid var(--clr-accent-tertiary-300);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--box-shadow);
+  padding: 1.75rem;
+  width: min(420px, calc(100vw - 3rem));
+}
+
+dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--form-section-gap-vertical);
+}
+
+.dialog-heading {
+  font: var(--f-primary-600);
+  color: var(--clr-neutral-900);
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+}
+
+.field-error {
+  font: var(--f-primary-150);
+  color: var(--clr-feedback-danger-700);
+}
+
+input[aria-invalid="true"] {
+  border-color: var(--clr-feedback-danger-500);
+  outline: none;
+  box-shadow:
+    0px 0px 0px 2px var(--clr-neutral-50),
+    0px 0px 0px 4px var(--clr-feedback-danger-500);
+}
 
 /* ══════════════════════════════════════════════════════════
    5. VIEW-SPECIFIC
@@ -736,6 +781,12 @@ h3.section-title:has(+ .btn-row) {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.project-name-row {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
 }
 

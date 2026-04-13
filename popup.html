@@ -113,7 +113,16 @@
           </div>
 
           <div id="project-info-bar">
-            <h2 id="project-heading" class="view-title"></h2>
+            <div class="project-name-row">
+              <h2 id="project-heading" class="view-title"></h2>
+              <button
+                id="btn-edit-project-name"
+                class="btn btn-sm btn-icon"
+                aria-label="Edit project name"
+              >
+                <i data-lucide="pencil" aria-hidden="true"></i>
+              </button>
+            </div>
             <div id="progress-wrap">
               <div id="progress-bar-track">
                 <div id="progress-bar-fill"></div>
@@ -395,6 +404,63 @@
 
   <!-- Toast notification -->
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <!-- ── DIALOG: Edit Project Name ──────────────────────────── -->
+  <dialog id="dialog-edit-project" aria-labelledby="dialog-edit-project-heading">
+    <h2 id="dialog-edit-project-heading" class="dialog-heading">Edit Project Name</h2>
+    <form id="form-edit-project" method="dialog" novalidate>
+      <div class="field">
+        <label for="edit-proj-name">
+          Project Name <span class="req">(required)</span>
+        </label>
+        <input
+          type="text"
+          id="edit-proj-name"
+          required
+          autocomplete="off"
+          aria-describedby="edit-proj-name-error"
+        >
+        <span id="edit-proj-name-error" class="field-error hidden" role="alert"></span>
+      </div>
+      <div class="btn-row dialog-actions">
+        <button type="button" id="btn-edit-project-cancel" class="btn">Cancel</button>
+        <button type="submit" id="btn-edit-project-save" class="btn btn-tertiary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ── DIALOG: Edit Finding ───────────────────────────────── -->
+  <dialog id="dialog-edit-finding" aria-labelledby="dialog-edit-finding-heading">
+    <h2 id="dialog-edit-finding-heading" class="dialog-heading">Edit Finding</h2>
+    <form id="form-edit-finding" method="dialog" novalidate>
+      <div class="field">
+        <label for="edit-finding-id">
+          Finding ID <span class="req">(required)</span>
+        </label>
+        <input
+          type="text"
+          id="edit-finding-id"
+          required
+          autocomplete="off"
+          aria-describedby="edit-finding-id-error"
+        >
+        <span id="edit-finding-id-error" class="field-error hidden" role="alert"></span>
+      </div>
+      <div class="field">
+        <label for="edit-finding-url">Finding URL</label>
+        <input
+          type="url"
+          id="edit-finding-url"
+          autocomplete="off"
+          placeholder="https://…"
+        >
+      </div>
+      <div class="btn-row dialog-actions">
+        <button type="button" id="btn-edit-finding-cancel" class="btn">Cancel</button>
+        <button type="submit" id="btn-edit-finding-save" class="btn btn-tertiary">Save</button>
+      </div>
+    </form>
+  </dialog>
 
   <script src="icons/lucide.min.js"></script>
   <script src="popup.js"></script>

@@ -10,6 +10,11 @@ let currentProjectId = null;
 let currentFindingId = null;
 let importItems = []; // working list during import
 
+// ── DIALOG STATE ──────────────────────────────────────────
+let dialogOpenerEl    = null; // element that opened the current dialog
+let editingProjectId  = null; // project being edited
+let editingFindingUid = null; // finding.id (internal UID) being edited
+
 // ── TAB STATE ─────────────────────────────────────────────
 let activeTabId = 'projects';
 let openProjectTabs = []; // [{ id, name }]
@@ -186,13 +191,19 @@ async function renderHome() {
         <button class="btn btn-sm btn-tertiary" data-action="open" aria-label="Open ${esc(proj.name)}">
           Open
           <i data-lucide="arrow-right" aria-hidden="true"></i>
-          </button>
-        <button class="btn btn-sm btn-danger" data-action="delete" aria-label="Delete ${esc(proj.name)}">
+        </button>
+        <button class="btn btn-sm btn-icon" data-action="edit" data-pid="${proj.id}" aria-label="Edit name for ${esc(proj.name)}">
+          <i data-lucide="pencil" aria-hidden="true"></i>
+        </button>
+        <button class="btn btn-sm btn-danger btn-icon" data-action="delete" aria-label="Delete ${esc(proj.name)}">
           <i data-lucide="trash-2" aria-hidden="true"></i>
         </button>
       </div>
     `;
     card.querySelector("[data-action='open']").addEventListener("click", () => openProject(proj.id));
+    card.querySelector("[data-action='edit']").addEventListener("click", e => {
+      openEditProjectDialog(proj.id, e.currentTarget);
+    });
     card.querySelector("[data-action='delete']").addEventListener("click", async () => {
       const confirmMsg = allDone
         ? `"${proj.name}" is complete. Delete this project? This cannot be undone.`
@@ -233,6 +244,181 @@ function collapseSidebar() {
     document.getElementById("btn-sidebar-toggle").setAttribute("aria-expanded", "false");
   }
 }
+
+// ── DIALOG HELPERS ────────────────────────────────────────
+function openDialog(dialogEl, openerEl) {
+  dialogOpenerEl = openerEl;
+  dialogEl.showModal();
+  const firstFocusable = dialogEl.querySelector(
+    'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])'
+  );
+  if (firstFocusable) firstFocusable.focus();
+}
+
+function closeDialog(dialogEl) {
+  dialogEl.close();
+  if (dialogOpenerEl) {
+    dialogOpenerEl.focus();
+    dialogOpenerEl = null;
+  }
+}
+
+// ── FIELD VALIDATION HELPERS ──────────────────────────────
+function setFieldError(inputEl, errorEl, message) {
+  inputEl.setAttribute('aria-invalid', 'true');
+  errorEl.textContent = message;
+  errorEl.classList.remove('hidden');
+  inputEl.focus();
+}
+
+function clearFieldError(inputEl, errorEl) {
+  inputEl.removeAttribute('aria-invalid');
+  errorEl.textContent = '';
+  errorEl.classList.add('hidden');
+}
+
+// ── EDIT PROJECT NAME ─────────────────────────────────────
+const dialogEditProject = document.getElementById('dialog-edit-project');
+const formEditProject   = document.getElementById('form-edit-project');
+const inputEditProjName = document.getElementById('edit-proj-name');
+const errorEditProjName = document.getElementById('edit-proj-name-error');
+
+async function openEditProjectDialog(projectId, openerEl) {
+  const project = await getProject(projectId);
+  if (!project) return;
+  editingProjectId = projectId;
+  inputEditProjName.value = project.name;
+  clearFieldError(inputEditProjName, errorEditProjName);
+  openDialog(dialogEditProject, openerEl);
+}
+
+document.getElementById('btn-edit-project-cancel').addEventListener('click', () => {
+  closeDialog(dialogEditProject);
+});
+
+formEditProject.addEventListener('submit', async e => {
+  e.preventDefault();
+  const newName = inputEditProjName.value.trim();
+  if (!newName) {
+    setFieldError(inputEditProjName, errorEditProjName, 'Project name is required.');
+    return;
+  }
+  clearFieldError(inputEditProjName, errorEditProjName);
+
+  const project = await getProject(editingProjectId);
+  if (!project) return;
+  project.name = newName;
+  await upsertProject(project);
+
+  // Update sidebar tab label
+  const tabLabel = document.querySelector(`.tab-btn[data-tab="${editingProjectId}"] .tab-label`);
+  if (tabLabel) tabLabel.textContent = newName;
+
+  // Re-render home so card aria-labels stay in sync
+  await renderHome();
+
+  // renderHome() destroys cards — re-query the live edit button by data-pid
+  const requeriedOpener = document.querySelector(`[data-action="edit"][data-pid="${editingProjectId}"]`);
+  if (requeriedOpener) dialogOpenerEl = requeriedOpener;
+
+  // If on this project's dashboard, update heading + button label directly
+  if (currentProjectId === editingProjectId) {
+    document.getElementById('project-heading').textContent = newName;
+    document.getElementById('btn-edit-project-name').setAttribute(
+      'aria-label', `Edit name for ${newName}`
+    );
+  }
+
+  closeDialog(dialogEditProject);
+  toast('✓ Project renamed', 'success');
+  editingProjectId = null;
+});
+
+dialogEditProject.addEventListener('close', () => {
+  if (dialogOpenerEl) { dialogOpenerEl.focus(); dialogOpenerEl = null; }
+});
+
+// ── EDIT FINDING ──────────────────────────────────────────
+const dialogEditFinding   = document.getElementById('dialog-edit-finding');
+const formEditFinding     = document.getElementById('form-edit-finding');
+const inputEditFindingId  = document.getElementById('edit-finding-id');
+const inputEditFindingUrl = document.getElementById('edit-finding-url');
+const errorEditFindingId  = document.getElementById('edit-finding-id-error');
+
+async function openEditFindingDialog(findingUid, openerEl) {
+  const project = await getProject(currentProjectId);
+  if (!project) return;
+  const finding = project.findings.find(f => f.id === findingUid);
+  if (!finding) return;
+
+  editingFindingUid = findingUid;
+  document.getElementById('dialog-edit-finding-heading').textContent =
+    `Edit Finding ${finding.findingId}`;
+  inputEditFindingId.value  = finding.findingId;
+  inputEditFindingUrl.value = finding.findingUrl || '';
+  clearFieldError(inputEditFindingId, errorEditFindingId);
+  openDialog(dialogEditFinding, openerEl);
+}
+
+document.getElementById('btn-edit-finding-cancel').addEventListener('click', () => {
+  closeDialog(dialogEditFinding);
+});
+
+formEditFinding.addEventListener('submit', async e => {
+  e.preventDefault();
+  const newFindingId  = inputEditFindingId.value.trim();
+  const newFindingUrl = inputEditFindingUrl.value.trim() || null;
+
+  if (!newFindingId) {
+    setFieldError(inputEditFindingId, errorEditFindingId, 'Finding ID is required.');
+    return;
+  }
+  clearFieldError(inputEditFindingId, errorEditFindingId);
+
+  const project = await getProject(currentProjectId);
+  if (!project) return;
+  const finding = project.findings.find(f => f.id === editingFindingUid);
+  if (!finding) return;
+
+  finding.findingId  = newFindingId;
+  finding.findingUrl = newFindingUrl;
+  await upsertProject(project);
+  await renderProject();
+
+  // renderProject() recreates rows — re-query the live edit button by data-fid
+  const requeriedOpener = document.querySelector(
+    `[data-action="edit-finding"][data-fid="${editingFindingUid}"]`
+  );
+  if (requeriedOpener) dialogOpenerEl = requeriedOpener;
+
+  closeDialog(dialogEditFinding);
+  toast('✓ Finding updated', 'success');
+  editingFindingUid = null;
+});
+
+dialogEditFinding.addEventListener('close', () => {
+  if (dialogOpenerEl) { dialogOpenerEl.focus(); dialogOpenerEl = null; }
+});
+
+// ── DELETE FINDING ────────────────────────────────────────
+async function deleteFinding(findingUid) {
+  const project = await getProject(currentProjectId);
+  if (!project) return;
+  const finding = project.findings.find(f => f.id === findingUid);
+  if (!finding) return;
+
+  if (!confirm(`Delete finding "${finding.findingId}"? This cannot be undone.`)) return;
+
+  project.findings = project.findings.filter(f => f.id !== findingUid);
+  await upsertProject(project);
+  await renderProject();
+  toast('Finding deleted');
+}
+
+// Static click handler for dashboard edit button
+document.getElementById('btn-edit-project-name').addEventListener('click', e => {
+  openEditProjectDialog(currentProjectId, e.currentTarget);
+});
 
 document.getElementById("tab-projects").addEventListener("click", async () => {
   tabSubView.projects = "view-home";
@@ -327,6 +513,9 @@ async function renderProject() {
 
   // Heading
   document.getElementById("project-heading").textContent = project.name;
+  document.getElementById("btn-edit-project-name").setAttribute(
+    "aria-label", `Edit name for ${project.name}`
+  );
 
   // Progress
   document.getElementById("progress-bar-fill").style.width = pct + "%";
@@ -380,6 +569,12 @@ async function renderProject() {
         ${internalCell}
         <td>
           <div class="actions-cell">
+            <button class="btn btn-sm btn-icon" data-action="edit-finding" data-fid="${f.id}" aria-label="Edit finding ${esc(f.findingId)}">
+              <i data-lucide="pencil" aria-hidden="true"></i>
+            </button>
+            <button class="btn btn-sm btn-danger btn-icon" data-action="delete-finding" data-fid="${f.id}" aria-label="Delete finding ${esc(f.findingId)}">
+              <i data-lucide="trash-2" aria-hidden="true"></i>
+            </button>
             <button class="btn btn-sm btn-tertiary" data-action="validate" data-fid="${f.id}" aria-label="Validate finding ${esc(f.findingId)}">Validate</button>
           </div>
         </td>
@@ -389,6 +584,7 @@ async function renderProject() {
   }
 
   renderMdOutput(project);
+  lucide.createIcons();
 }
 
 // Event delegation for findings table
@@ -397,6 +593,12 @@ document.getElementById("findings-tbody").addEventListener("click", e => {
   if (!btn) return;
   if (btn.dataset.action === "validate") {
     openValidation(btn.dataset.fid);
+  }
+  if (btn.dataset.action === "edit-finding") {
+    openEditFindingDialog(btn.dataset.fid, btn);
+  }
+  if (btn.dataset.action === "delete-finding") {
+    deleteFinding(btn.dataset.fid);
   }
 });
 
