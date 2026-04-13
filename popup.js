@@ -226,6 +226,14 @@ document.getElementById("btn-sidebar-toggle").addEventListener("click", () => {
   document.getElementById("btn-sidebar-toggle").setAttribute("aria-expanded", String(!isCollapsed));
 });
 
+function collapseSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  if (!sidebar.classList.contains("collapsed")) {
+    sidebar.classList.add("collapsed");
+    document.getElementById("btn-sidebar-toggle").setAttribute("aria-expanded", "false");
+  }
+}
+
 document.getElementById("tab-projects").addEventListener("click", async () => {
   tabSubView.projects = "view-home";
   await renderHome();
@@ -304,6 +312,7 @@ document.getElementById("form-new-project").addEventListener("submit", async e =
   ensureProjectTab(project.id, project.name);
   tabSubView[project.id] = "view-project";
   await renderProject();
+  collapseSidebar();
   activateTab(project.id);
 });
 
@@ -576,6 +585,7 @@ document.getElementById("btn-save-import").addEventListener("click", async () =>
   await upsertProject(project);
   importItems = [];
   await renderProject();
+  collapseSidebar();
   showSubView("project", "view-project");
   toast(`✓ ${project.findings.length} findings saved`, "success");
 });
