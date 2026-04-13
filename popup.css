@@ -998,12 +998,6 @@ h3.section-title:has(+ .btn-row) {
   border: 0;
 }
 
-.hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-  overflow: auto;
-}
-
 .view-description {
   font: var(--f-primary-300);
   color: var(--clr-neutral-800);
