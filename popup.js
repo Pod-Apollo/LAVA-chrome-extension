@@ -584,13 +584,13 @@ async function renderProject() {
         ${internalCell}
         <td>
           <div class="actions-cell">
+            <button class="btn btn-sm btn-tertiary" data-action="validate" data-fid="${f.id}" aria-label="Validate finding ${esc(f.findingId)}">Validate</button>
             <button class="btn btn-sm btn-icon" data-action="edit-finding" data-fid="${f.id}" aria-label="Edit finding ${esc(f.findingId)}">
               <i data-lucide="pencil" aria-hidden="true"></i>
             </button>
             <button class="btn btn-sm btn-danger btn-icon" data-action="delete-finding" data-fid="${f.id}" aria-label="Delete finding ${esc(f.findingId)}">
               <i data-lucide="trash-2" aria-hidden="true"></i>
             </button>
-            <button class="btn btn-sm btn-tertiary" data-action="validate" data-fid="${f.id}" aria-label="Validate finding ${esc(f.findingId)}">Validate</button>
           </div>
         </td>
       `;

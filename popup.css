@@ -685,7 +685,7 @@ h3.section-title:has(+ .btn-row) {
 
 .card-actions {
   display: flex;
-  gap: 1rem;
+  gap: 0.5rem;
   flex-shrink: 0;
 }
 
@@ -870,6 +870,11 @@ dialog .field {
 #findings-table a {
   color: var(--clr-accent-secondary-400);
   text-underline-offset: 3px;
+}
+
+.actions-cell {
+  display: flex;
+  gap: .5rem
 }
 
 .col-num { width: 2rem; }
