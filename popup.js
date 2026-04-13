@@ -60,10 +60,28 @@ function uid() {
 // ── TOAST ─────────────────────────────────────────────────
 let toastTimer;
 function toast(msg, type = "default") {
-  const el = document.getElementById("toast");
-  el.textContent = msg;
+  const el         = document.getElementById("toast");
+  const announceEl = document.getElementById("toast-announce");
+
+  // Separate decorative icon from the readable text
+  const iconMatch = msg.match(/^([✓✗])\s*/);
+  const plainText = iconMatch ? msg.slice(iconMatch[0].length) : msg;
+
+  // Visual toast — icon rendered with aria-hidden, rest as escaped text
+  if (iconMatch) {
+    const icon = iconMatch[1];
+    el.innerHTML = `<span aria-hidden="true">${icon}</span> ${esc(plainText)}`;
+  } else {
+    el.textContent = msg;
+  }
   el.className = `toast ${type}`;
   el.classList.remove("hidden");
+
+  // Announcement region — always in the DOM so aria-live fires reliably.
+  // Clear first so repeat messages are detected as a new change by AT.
+  announceEl.textContent = "";
+  requestAnimationFrame(() => { announceEl.textContent = plainText; });
+
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add("hidden"), 2400);
 }
@@ -72,9 +90,9 @@ function toast(msg, type = "default") {
 async function copyText(text, label = "Copied") {
   try {
     await navigator.clipboard.writeText(text);
-    toast(`✓ ${label} copied`, "success");
+    toast(`✓ Successfully copied ${label}`, "success");
   } catch {
-    toast("Could not copy — try manually", "error");
+    toast("Error: could not copy — try manually", "error");
   }
 }
 
@@ -185,7 +203,7 @@ async function renderHome() {
     card.innerHTML = `
       <div class="project-card-body">
         <div class="project-card-name">${esc(proj.name)}</div>
-        <div class="project-card-progress">${done}/${total} findings${allDone ? " ✓" : ""}</div>
+        <div class="project-card-progress">${done}/${total} findings${allDone ? ' <span aria-hidden="true">✓</span>' : ""}</div>
       </div>
       <div class="card-actions">
         <button class="btn btn-sm btn-tertiary" data-action="open" aria-label="Open ${esc(proj.name)}">
@@ -213,7 +231,7 @@ async function renderHome() {
         removeProjectTab(proj.id);
         if (currentProjectId === proj.id) currentProjectId = null;
         await renderHome();
-        toast("Project deleted");
+        toast("Successfully deleted project");
       }
     });
     list.appendChild(card);
@@ -227,6 +245,7 @@ async function openProject(id) {
   if (p) ensureProjectTab(id, p.name);
   tabSubView[id] = "view-project";
   await renderProject();
+  collapseSidebar();
   activateTab(id);
 }
 
@@ -249,10 +268,6 @@ function collapseSidebar() {
 function openDialog(dialogEl, openerEl) {
   dialogOpenerEl = openerEl;
   dialogEl.showModal();
-  const firstFocusable = dialogEl.querySelector(
-    'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])'
-  );
-  if (firstFocusable) firstFocusable.focus();
 }
 
 function closeDialog(dialogEl) {
@@ -330,7 +345,7 @@ formEditProject.addEventListener('submit', async e => {
   }
 
   closeDialog(dialogEditProject);
-  toast('✓ Project renamed', 'success');
+  toast('✓ Successfully renamed project', 'success');
   editingProjectId = null;
 });
 
@@ -392,7 +407,7 @@ formEditFinding.addEventListener('submit', async e => {
   if (requeriedOpener) dialogOpenerEl = requeriedOpener;
 
   closeDialog(dialogEditFinding);
-  toast('✓ Finding updated', 'success');
+  toast('✓ Successfully updated finding', 'success');
   editingFindingUid = null;
 });
 
@@ -412,7 +427,7 @@ async function deleteFinding(findingUid) {
   project.findings = project.findings.filter(f => f.id !== findingUid);
   await upsertProject(project);
   await renderProject();
-  toast('Finding deleted');
+  toast('Successfully deleted finding');
 }
 
 // Static click handler for dashboard edit button
@@ -628,7 +643,7 @@ document.getElementById("btn-delete-project").addEventListener("click", async ()
     tabSubView.projects = "view-home";
     activateTab("projects");
     renderHome();
-    toast("Project deleted");
+    toast("Successfully deleted project");
   }
 });
 
@@ -655,7 +670,7 @@ function renderMdOutput(project) {
       ? `[${f.findingId}](${f.findingUrl})`
       : f.findingId;
     const taskCell = f.taskId
-      ? (f.taskUrl ? `[${f.taskId}](${f.taskUrl})` : f.taskId)
+      ? (f.taskUrl && f.status !== "Dismissed" ? `[${f.taskId}](${f.taskUrl})` : f.taskId)
       : "";
     const statusCell = f.status ? f.status.replace(/_/g, " ") : "";
     return hasDismissed
@@ -673,7 +688,7 @@ function downloadExcel(project) {
     : ["#", "Finding ID", "Finding URL", "Status", "Task ID", "Task URL"];
 
   const rows = project.findings.map((f, i) => {
-    const base = [i + 1, f.findingId, f.findingUrl || "", f.status || "", f.taskId || "", f.taskUrl || ""];
+    const base = [i + 1, f.findingId, f.findingUrl || "", f.status || "", f.taskId || "", f.status === "Dismissed" ? "" : (f.taskUrl || "")];
     return hasDismissed ? [...base, f.internalTracking || ""] : base;
   });
 
@@ -685,7 +700,7 @@ function downloadExcel(project) {
   a.download = `${project.name.replace(/[^a-z0-9]/gi, "_")}_findings.xls`;
   a.click();
   URL.revokeObjectURL(url);
-  toast("✓ Excel downloaded", "success");
+  toast("✓ Successfully downloaded Excel file", "success");
 }
 
 // ── VIEW: IMPORT ──────────────────────────────────────────
@@ -721,7 +736,7 @@ pasteArea.addEventListener("paste", e => {
 
 document.getElementById("btn-parse-paste").addEventListener("click", () => {
   const parsed = extractPasteItems();
-  if (!parsed.length) { toast("Nothing to parse", "error"); return; }
+  if (!parsed.length) { toast("Error: nothing to parse", "error"); return; }
 
   // Merge with existing importItems (avoid duplicates by findingId)
   parsed.forEach(item => {
@@ -741,10 +756,10 @@ document.getElementById("btn-add-manual").addEventListener("click", () => {
   const findingId = idInput.value.trim();
   const findingUrl = urlInput.value.trim() || null;
 
-  if (!findingId) { toast("Enter a Finding ID", "error"); return; }
+  if (!findingId) { toast("Error: enter a Finding ID", "error"); return; }
 
   const exists = importItems.some(i => i.findingId === findingId);
-  if (exists) { toast("Already in the list", "error"); return; }
+  if (exists) { toast("Error: already in the list", "error"); return; }
 
   importItems.push({ id: uid(), findingId, findingUrl });
   idInput.value = "";
@@ -762,7 +777,7 @@ document.getElementById("btn-cancel-import").addEventListener("click", () => {
 });
 
 document.getElementById("btn-save-import").addEventListener("click", async () => {
-  if (!importItems.length) { toast("Nothing to save", "error"); return; }
+  if (!importItems.length) { toast("Error: nothing to save", "error"); return; }
   const project = await getProject(currentProjectId);
   if (!project) return;
 
@@ -789,7 +804,7 @@ document.getElementById("btn-save-import").addEventListener("click", async () =>
   await renderProject();
   collapseSidebar();
   showSubView("project", "view-project");
-  toast(`✓ ${project.findings.length} findings saved`, "success");
+  toast(`✓ Successfully saved ${project.findings.length} findings`, "success");
 });
 
 function extractPasteItems() {
@@ -1034,7 +1049,7 @@ document.getElementById("btn-pull-page").addEventListener("click", async () => {
     }
 
   } catch (err) {
-    toast("✗ " + (err.message || "Could not pull data. Are you on a finding page?"), "error");
+    toast("Error: " + (err.message || "could not pull data — are you on a finding page?"), "error");
   }
 });
 
@@ -1092,7 +1107,7 @@ document.getElementById("btn-update-output").addEventListener("click", () => {
   const comment  = document.getElementById("val-comment").value.trim();
   const tools    = [...document.querySelectorAll("input[name='tools']:checked")].map(c => c.value);
 
-  if (!status) { toast("Select a status first", "error"); return; }
+  if (!status) { toast("Error: select a status first", "error"); return; }
 
   const screenshotName = buildScreenshotName(rawFindingId, status);
   const findingComment = buildFindingComment({ env, status, screenshotName, tools, comment });
@@ -1192,16 +1207,16 @@ document.getElementById("btn-copy-task").addEventListener("click", () => {
 // ── INJECT COMMENT ────────────────────────────────────────
 document.getElementById("btn-inject-finding").addEventListener("click", async () => {
   const text = document.getElementById("val-finding-comment").value;
-  await injectIntoPage("textarea#message", text, "Finding comment injected");
+  await injectIntoPage("textarea#message", text, "Successfully injected finding comment");
 });
 
 document.getElementById("btn-inject-task").addEventListener("click", async () => {
   const text = document.getElementById("val-task-comment").value;
-  await injectIntoPage("textarea.form-control.editor", text, "Task comment injected");
+  await injectIntoPage("textarea.form-control.editor", text, "Successfully injected task comment");
 });
 
 async function injectIntoPage(selector, text, successMsg) {
-  if (!text) { toast("Generate output first", "error"); return; }
+  if (!text) { toast("Error: generate output first", "error"); return; }
   try {
     const tab = await getActivePageTab();
     const results = await chrome.scripting.executeScript({
@@ -1224,10 +1239,10 @@ async function injectIntoPage(selector, text, successMsg) {
     if (result?.ok) {
       toast("✓ " + successMsg, "success");
     } else {
-      toast(result?.error || "Could not inject — are you on the right page?", "error");
+      toast("Error: " + (result?.error || "could not inject — are you on the right page?"), "error");
     }
   } catch (err) {
-    toast("Injection failed: " + err.message, "error");
+    toast("Error: injection failed — " + err.message, "error");
   }
 }
 
@@ -1240,7 +1255,7 @@ document.getElementById("btn-save-to-table").addEventListener("click", async () 
   const env      = document.getElementById("pulled-environment").value.trim();
   const pullFid  = document.getElementById("pulled-finding-id").value.trim();
 
-  if (!status) { toast("Select a status first", "error"); return; }
+  if (!status) { toast("Error: select a status first", "error"); return; }
 
   const project = await getProject(currentProjectId);
   if (!project) return;
@@ -1258,7 +1273,7 @@ document.getElementById("btn-save-to-table").addEventListener("click", async () 
 
   await upsertProject(project);
   await renderProject();
-  toast("✓ Saved to table", "success");
+  toast("✓ Successfully saved to table", "success");
 
   // Check if all done → prompt to view delivery table
   const allDone = project.findings.every(f => f.completed);
@@ -1277,7 +1292,7 @@ document.getElementById("btn-open-finding").addEventListener("click", async () =
   if (finding?.findingUrl) {
     chrome.tabs.create({ url: finding.findingUrl });
   } else {
-    toast("No URL stored for this finding", "error");
+    toast("Error: no URL stored for this finding", "error");
   }
 });
 
@@ -1294,7 +1309,7 @@ document.getElementById("btn-next-finding").addEventListener("click", async () =
     openValidation(next.id);
   } else {
     showSubView("project", "view-project");
-    toast("All findings complete!", "success");
+    toast("Successfully completed all findings!", "success");
   }
 });
 
