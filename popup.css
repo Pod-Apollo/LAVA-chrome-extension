@@ -829,7 +829,7 @@ dialog .field {
   border: var(--_table-border);
   border-radius: var(--radius);
   box-shadow: var(--box-shadow);
-  overflow-x: scroll;
+  overflow-x: auto;
 }
 
 #findings-table {
@@ -933,7 +933,7 @@ dialog .field {
   --_table-border: 1px solid var(--clr-accent-tertiary-400);
   border: var(--_table-border);
   border-radius: var(--radius);
-  overflow-x: scroll;
+  overflow-x: auto;
 }
 
 .import-preview-table {
