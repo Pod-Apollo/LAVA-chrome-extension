@@ -291,12 +291,23 @@
               </select>
             </div>
 
-            <div class="field hidden" id="field-internal-tracking">
-              <label for="val-internal-url">Client Internal Tracking URL</label>
-              <input type="url" id="val-internal-url" aria-describedby="internal-tracking-hint"
-                placeholder="https://...">
-              <p class="field-hint" id="internal-tracking-hint">Required for dismissed findings — used to track
-                associated task deletion.</p>
+            <div class="hidden" id="field-internal-tracking">
+              <div class="pulled-grid">
+                <div class="field">
+                  <label for="val-internal-name">Internal Tracking Label</label>
+                  <input type="text" id="val-internal-name" placeholder="e.g. Jira-1234">
+                </div>
+                <div class="field">
+                  <label for="val-internal-url">Internal Tracking URL</label>
+                  <input type="url" id="val-internal-url" placeholder="https://...">
+                </div>
+              </div>
+              <div class="field hidden" id="field-internal-tracking">
+                <label for="val-internal-url">Client Internal Tracking URL</label>
+                <input type="url" id="val-internal-url" aria-describedby="internal-tracking-hint"
+                  placeholder="https://...">
+              </div>
+                <p class="field-hint" id="internal-tracking-hint">Required for dismissed findings — used to track associated task deletion.</p>
             </div>
 
             <fieldset class="tools-fieldset">

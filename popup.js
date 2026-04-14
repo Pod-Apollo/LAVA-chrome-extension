@@ -281,8 +281,12 @@ function closeDialog(dialogEl) {
 // ── FIELD VALIDATION HELPERS ──────────────────────────────
 function setFieldError(inputEl, errorEl, message) {
   inputEl.setAttribute('aria-invalid', 'true');
-  errorEl.textContent = message;
+  errorEl.innerHTML =
+    '<i data-lucide="triangle-alert" aria-hidden="true" class="field-error-icon"></i>'
+    + '<span class="sr-only">Error: </span>'
+    + esc(message);
   errorEl.classList.remove('hidden');
+  lucide.createIcons();
   inputEl.focus();
 }
 
@@ -536,9 +540,11 @@ async function renderProject() {
   document.getElementById("progress-bar-fill").style.width = pct + "%";
   document.getElementById("progress-label").textContent = `${done} / ${total} complete`;
 
-  // Internal tracking column visibility
-  const hasDismissed = project.findings.some(f => f.status === "Dismissed");
-  document.getElementById("col-internal-head").classList.toggle("hidden", !hasDismissed);
+  // Internal tracking column: only show if at least one dismissed finding has content to display
+  const showInternalCol = project.findings.some(
+    f => f.status === "Dismissed" && (f.internalTracking || f.internalTrackingName)
+  );
+  document.getElementById("col-internal-head").classList.toggle("hidden", !showInternalCol);
 
   // Findings table
   const noFindings = document.getElementById("no-findings");
@@ -571,9 +577,17 @@ async function renderProject() {
         ? `<span class="status-badge ${statusClass(f.status)}">${esc(f.status.replace(/_/g, " "))}</span>`
         : `<span class="status-badge status-pending">Pending</span>`;
 
-      const internalCell = hasDismissed
-        ? `<td>${f.internalTracking ? `<a href="${esc(f.internalTracking)}" target="_blank">Link</a>` : "—"}</td>`
-        : "";
+      const internalCell = (() => {
+        if (!showInternalCol) return "";
+        const name = f.internalTrackingName || "";
+        const url  = f.internalTracking || "";
+        let content;
+        if (name && url)  content = `<a href="${esc(url)}" target="_blank">${esc(name)}</a>`;
+        else if (name)    content = esc(name);
+        else if (url)     content = `<a href="${esc(url)}" target="_blank" class="url-truncate">${esc(url)}</a>`;
+        else              content = "—";
+        return `<td>${content}</td>`;
+      })();
 
 
       tr.innerHTML = `
@@ -659,11 +673,13 @@ document.getElementById("btn-download-excel").addEventListener("click", async ()
 });
 
 function renderMdOutput(project) {
-  const hasDismissed = project.findings.some(f => f.status === "Dismissed");
-  const header  = hasDismissed
+  const showInternalCol = project.findings.some(
+    f => f.status === "Dismissed" && (f.internalTracking || f.internalTrackingName)
+  );
+  const header  = showInternalCol
     ? "| Final Status | Finding | Task | Internal Tracking |"
     : "| Final Status | Finding | Task |";
-  const divider = hasDismissed ? "|---|---|---|---|" : "|---|---|---|";
+  const divider = showInternalCol ? "|---|---|---|---|" : "|---|---|---|";
 
   const rows = project.findings.map(f => {
     const findingCell = f.findingUrl
@@ -673,23 +689,27 @@ function renderMdOutput(project) {
       ? (f.taskUrl && f.status !== "Dismissed" ? `[${f.taskId}](${f.taskUrl})` : f.taskId)
       : "";
     const statusCell = f.status ? f.status.replace(/_/g, " ") : "";
-    return hasDismissed
-      ? `| ${statusCell} | ${findingCell} | ${taskCell} | ${f.internalTracking || ""} |`
-      : `| ${statusCell} | ${findingCell} | ${taskCell} |`;
+    if (!showInternalCol) return `| ${statusCell} | ${findingCell} | ${taskCell} |`;
+    const name = f.internalTrackingName || "";
+    const url  = f.internalTracking || "";
+    const internalCell = (name && url) ? `[${name}](${url})` : (name || url || "");
+    return `| ${statusCell} | ${findingCell} | ${taskCell} | ${internalCell} |`;
   });
 
   document.getElementById("md-output").value = [header, divider, ...rows].join("\n");
 }
 
 function downloadExcel(project) {
-  const hasDismissed = project.findings.some(f => f.status === "Dismissed");
-  const headers = hasDismissed
-    ? ["#", "Finding ID", "Finding URL", "Status", "Task ID", "Task URL", "Internal Tracking"]
+  const showInternalCol = project.findings.some(
+    f => f.status === "Dismissed" && (f.internalTracking || f.internalTrackingName)
+  );
+  const headers = showInternalCol
+    ? ["#", "Finding ID", "Finding URL", "Status", "Task ID", "Task URL", "Internal Tracking Label", "Internal Tracking URL"]
     : ["#", "Finding ID", "Finding URL", "Status", "Task ID", "Task URL"];
 
   const rows = project.findings.map((f, i) => {
     const base = [i + 1, f.findingId, f.findingUrl || "", f.status || "", f.taskId || "", f.status === "Dismissed" ? "" : (f.taskUrl || "")];
-    return hasDismissed ? [...base, f.internalTracking || ""] : base;
+    return showInternalCol ? [...base, f.internalTrackingName || "", f.internalTracking || ""] : base;
   });
 
   const tsv = [headers, ...rows].map(r => r.join("\t")).join("\n");
@@ -792,7 +812,8 @@ document.getElementById("btn-save-import").addEventListener("click", async () =>
         taskId:          "",
         taskUrl:         null,
         status:          "",
-        internalTracking:"",
+        internalTrackingName: "",
+        internalTracking:     "",
         environment:     "",
         completed:       false,
       });
@@ -904,6 +925,9 @@ async function openValidation(findingId) {
       document.getElementById("val-status").value = finding.status;
       toggleDismissedField(finding.status === "Dismissed");
     }
+    if (finding.internalTrackingName) {
+      document.getElementById("val-internal-name").value = finding.internalTrackingName;
+    }
     if (finding.internalTracking) {
       document.getElementById("val-internal-url").value = finding.internalTracking;
     }
@@ -927,6 +951,7 @@ function resetValidationForm() {
   document.getElementById("pulled-environment").value= "";
   clearFindingIdError();
   document.getElementById("val-status").value = "";
+  document.getElementById("val-internal-name").value = "";
   document.getElementById("val-internal-url").value = "";
   document.getElementById("val-comment").value = "";
   document.getElementById("val-screenshot-name").value = "";
@@ -983,20 +1008,38 @@ function toggleDismissedField(show) {
 
 
 // ── TAB HELPER ───────────────────────────────────────────
-// Finds the tab for the current finding by URL, or falls back to the
-// most recently accessed non-extension tab.
-async function getActivePageTab(preferredUrl) {
+// Known URL patterns for the platform:
+//   Finding page: https://[client].hub.essentia11y.com/manual-evaluations/…
+//   Task page:    https://[client].hub.essentia11y.com/projects/…/tasks/…
+const TAB_PATTERNS = {
+  finding: t => t.url.includes("essentia11y.com/manual-evaluations"),
+  task:    t => t.url.includes("essentia11y.com/projects") && t.url.includes("/tasks/"),
+};
+
+/**
+ * Finds the best matching browser tab in three steps.
+ * @param {string|null} preferredUrl  - stored finding/task URL, used for exact match
+ * @param {"finding"|"task"|null} pageType - platform page type for pattern fallback
+ */
+async function getActivePageTab(preferredUrl = null, pageType = null) {
   const allTabs = await chrome.tabs.query({});
   const pageTabs = allTabs.filter(t => t.url && !t.url.startsWith("chrome-extension://") && !t.url.startsWith("chrome://"));
 
-  // 1. Try to match the stored finding URL exactly
+  // 1. Exact URL match (strip hash and query string before comparing)
   if (preferredUrl) {
     const stripHash = u => u.split("#")[0].split("?")[0];
     const match = pageTabs.find(t => stripHash(t.url) === stripHash(preferredUrl));
     if (match) return match;
-    // 2. Try partial match (same base path)
-    const partial = pageTabs.find(t => t.url.includes(stripHash(preferredUrl).split("/").slice(-1)[0]));
-    if (partial) return partial;
+  }
+
+  // 2. Platform pattern match — use known URL structure for each page type
+  const pattern = pageType ? TAB_PATTERNS[pageType] : null;
+  if (pattern) {
+    const byPattern = pageTabs.filter(pattern);
+    if (byPattern.length) {
+      // Among matches, prefer the most recently accessed
+      return byPattern.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
+    }
   }
 
   // 3. Fall back to the most recently accessed non-extension tab
@@ -1012,7 +1055,7 @@ document.getElementById("btn-pull-page").addEventListener("click", async () => {
     // Use stored finding URL to locate the exact tab
     const project = await getProject(currentProjectId);
     const finding = project?.findings.find(f => f.id === currentFindingId);
-    const tab = await getActivePageTab(finding?.findingUrl || null);
+    const tab = await getActivePageTab(finding?.findingUrl || null, "finding");
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: scrapeFindingPage,
@@ -1207,18 +1250,18 @@ document.getElementById("btn-copy-task").addEventListener("click", () => {
 // ── INJECT COMMENT ────────────────────────────────────────
 document.getElementById("btn-inject-finding").addEventListener("click", async () => {
   const text = document.getElementById("val-finding-comment").value;
-  await injectIntoPage("textarea#message", text, "Successfully injected finding comment");
+  await injectIntoPage("textarea#message", text, "Successfully injected finding comment", "finding");
 });
 
 document.getElementById("btn-inject-task").addEventListener("click", async () => {
   const text = document.getElementById("val-task-comment").value;
-  await injectIntoPage("textarea.form-control.editor", text, "Successfully injected task comment");
+  await injectIntoPage("textarea.form-control.editor", text, "Successfully injected task comment", "task");
 });
 
-async function injectIntoPage(selector, text, successMsg) {
+async function injectIntoPage(selector, text, successMsg, pageType = null) {
   if (!text) { toast("Error: generate output first", "error"); return; }
   try {
-    const tab = await getActivePageTab();
+    const tab = await getActivePageTab(null, pageType);
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: (sel, txt) => {
@@ -1251,7 +1294,8 @@ document.getElementById("btn-save-to-table").addEventListener("click", async () 
   const status   = document.getElementById("val-status").value;
   const taskId   = document.getElementById("pulled-task-id").value.trim();
   const taskUrl  = document.getElementById("pulled-task-id").dataset.taskUrl || null;
-  const internal = document.getElementById("val-internal-url").value.trim();
+  const internalName = document.getElementById("val-internal-name").value.trim();
+  const internal     = document.getElementById("val-internal-url").value.trim();
   const env      = document.getElementById("pulled-environment").value.trim();
   const pullFid  = document.getElementById("pulled-finding-id").value.trim();
 
@@ -1266,7 +1310,8 @@ document.getElementById("btn-save-to-table").addEventListener("click", async () 
   finding.status           = status;
   finding.taskId           = taskId || finding.taskId;
   finding.taskUrl          = taskUrl || finding.taskUrl;
-  finding.internalTracking = status === "Dismissed" ? internal : "";
+  finding.internalTrackingName = status === "Dismissed" ? internalName : "";
+  finding.internalTracking     = status === "Dismissed" ? internal     : "";
   finding.environment      = env || finding.environment;
   if (pullFid) finding.findingId = pullFid;
   finding.completed        = true;

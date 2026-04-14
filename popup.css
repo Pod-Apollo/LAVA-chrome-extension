@@ -758,6 +758,16 @@ dialog[open] {
 .field-error {
   font: var(--f-primary-150);
   color: var(--clr-feedback-danger-700);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.field-error-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  stroke: currentColor;
 }
 
 input[aria-invalid="true"] {
@@ -875,6 +885,15 @@ dialog .field {
 .actions-cell {
   display: flex;
   gap: .5rem
+}
+
+.url-truncate {
+  display: inline-block;
+  max-width: 12ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 
 .col-num { width: 2rem; }
