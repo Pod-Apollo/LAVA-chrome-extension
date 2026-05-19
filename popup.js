@@ -20,11 +20,38 @@ let activeTabId = 'projects';
 let openProjectTabs = []; // [{ id, name }]
 const tabSubView = { projects: 'view-home' };
 
+// ── CONSTANTS ─────────────────────────────────────────────
+const PLATFORM_META = {
+  web:     { label: 'Web',     icon: 'monitor'     },
+  android: { label: 'Android', icon: 'smartphone'  },
+  ios:     { label: 'iOS',     icon: 'tablet'      },
+  other:   { label: 'Other',   icon: 'help-circle' },
+};
+
+const DISMISSED_NOTE = `\n> *Note:*\n> *To dismiss findings, we need to delete the associated task, which removes the link to your internal tracking. That's why I included the link to your tracking system in the fourth column for the dismissed findings.*`;
+
 // ── STORAGE ───────────────────────────────────────────────
+function migrateProject(p) {
+  if (p.importType       === undefined) p.importType       = 'findings';
+  if (p.platform         === undefined) p.platform         = 'other';
+  if (p.expiresAt        === undefined) p.expiresAt        = p.createdAt + (3 * 86400000);
+  if (p.addDismissedNote === undefined) p.addDismissedNote = false;
+  return p;
+}
+
 function getProjects() {
   return new Promise(resolve => {
     chrome.storage.local.get("lava_projects", data => {
-      resolve(data.lava_projects || []);
+      let projects = data.lava_projects || [];
+      let migrated = false;
+      projects = projects.map(p => {
+        const before = JSON.stringify(p);
+        migrateProject(p);
+        if (JSON.stringify(p) !== before) migrated = true;
+        return p;
+      });
+      if (migrated) chrome.storage.local.set({ lava_projects: projects });
+      resolve(projects);
     });
   });
 }
@@ -127,7 +154,7 @@ async function updatePanelBreadcrumb(panelKey, viewId) {
     if (currentProjectId) {
       const p = await getProject(currentProjectId);
       if (p) {
-        const leaves = { 'view-import': 'Import Findings', 'view-validation': 'Validate' };
+        const leaves = { 'view-import': 'Import Findings or Tasks', 'view-validation': 'Validate' };
         document.getElementById('bc-back-project-label').textContent = p.name;
         document.getElementById('bc-project-leaf').textContent = leaves[viewId] || '';
         bcProjectPanel.classList.remove('bc-inactive');
@@ -180,6 +207,94 @@ function removeProjectTab(id) {
   if (btn) btn.remove();
 }
 
+// ── AUTO-DELETE ───────────────────────────────────────────
+async function deleteExpiredProjects() {
+  const data = await new Promise(r => chrome.storage.local.get(['lava_projects', 'lava_deleted_projects'], r));
+  const projects = data.lava_projects || [];
+  const deleted  = data.lava_deleted_projects || [];
+  const now      = Date.now();
+
+  const surviving = [];
+  projects.forEach(p => {
+    if (p.expiresAt && p.expiresAt <= now) {
+      deleted.push({ name: p.name, deletedAt: now });
+    } else {
+      surviving.push(p);
+    }
+  });
+
+  await new Promise(r => chrome.storage.local.set({ lava_projects: surviving, lava_deleted_projects: deleted }, r));
+}
+
+function formatExpiryDate(expiresAt) {
+  const diff  = expiresAt - Date.now();
+  const hours = diff / 3600000;
+
+  if (diff <= 0) return 'Expired';
+
+  if (hours <= 72) {
+    if (hours < 1) {
+      const mins = Math.ceil(diff / 60000);
+      return `Deletes in ${mins} minute${mins !== 1 ? 's' : ''}`;
+    }
+    if (hours < 24) {
+      const h = Math.ceil(hours);
+      return `Deletes in ${h} hour${h !== 1 ? 's' : ''}`;
+    }
+    const days = Math.ceil(hours / 24);
+    return `Deletes in ${days} day${days !== 1 ? 's' : ''}`;
+  }
+
+  return 'Deletes on ' + new Date(expiresAt).toLocaleString(undefined, {
+    month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+}
+
+async function renderDeletedSection() {
+  const data = await new Promise(r => chrome.storage.local.get('lava_deleted_projects', r));
+  let deleted = (data.lava_deleted_projects || []).filter(d => {
+    return (Date.now() - d.deletedAt) < 86400000;
+  });
+
+  // Prune expired ghost records
+  await new Promise(r => chrome.storage.local.set({ lava_deleted_projects: deleted }, r));
+
+  const section = document.getElementById('recently-deleted-section');
+  if (!deleted.length) {
+    section.hidden = true;
+    return;
+  }
+
+  section.hidden = false;
+  const list = document.getElementById('recently-deleted-list');
+  list.innerHTML = '';
+
+  deleted.forEach((d, i) => {
+    const deletedDate = new Date(d.deletedAt).toLocaleString(undefined, {
+      month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+    const card = document.createElement('div');
+    card.className = 'project-card project-card-ghost';
+    card.innerHTML = `
+      <div class="project-card-body">
+        <div class="project-card-name">${esc(d.name)}</div>
+        <div class="project-card-meta">Deleted on ${deletedDate}</div>
+      </div>
+      <button class="btn btn-sm" data-dismiss-index="${i}" aria-label="Dismiss deleted project ${esc(d.name)}">
+        Dismiss
+      </button>
+    `;
+    card.querySelector('[data-dismiss-index]').addEventListener('click', async () => {
+      const fresh = await new Promise(r => chrome.storage.local.get('lava_deleted_projects', r));
+      const updated = (fresh.lava_deleted_projects || []).filter((_, idx) => idx !== i);
+      await new Promise(r => chrome.storage.local.set({ lava_deleted_projects: updated }, r));
+      renderDeletedSection();
+    });
+    list.appendChild(card);
+  });
+  lucide.createIcons();
+}
+
 // ── VIEW: HOME ────────────────────────────────────────────
 async function renderHome() {
   const projects = await getProjects();
@@ -189,6 +304,7 @@ async function renderHome() {
 
   if (!projects.length) {
     empty.classList.remove("hidden");
+    await renderDeletedSection();
     return;
   }
   empty.classList.add("hidden");
@@ -197,20 +313,36 @@ async function renderHome() {
     const total = proj.findings.length;
     const done  = proj.findings.filter(f => f.completed).length;
     const allDone = total > 0 && done === total;
+    const isExpiringSoon = proj.expiresAt && (proj.expiresAt - Date.now()) <= 86400000;
+    const platformMeta = PLATFORM_META[proj.platform] || PLATFORM_META.other;
+
+    const expiryHtml = proj.expiresAt
+      ? `<div class="${isExpiringSoon ? 'project-card-expiry expiry-warning' : 'project-card-expiry'}">
+           ${isExpiringSoon ? '<i data-lucide="triangle-alert" aria-hidden="true"></i> ' : ''}${esc(formatExpiryDate(proj.expiresAt))}
+         </div>`
+      : "";
 
     const card = document.createElement("div");
-    card.className = "project-card" + (allDone ? " complete" : "");
+    card.className = "project-card" + (allDone ? " complete" : "") + (isExpiringSoon ? " expiring-soon" : "");
     card.innerHTML = `
       <div class="project-card-body">
         <div class="project-card-name">${esc(proj.name)}</div>
-        <div class="project-card-progress">${done}/${total} findings${allDone ? ' <span aria-hidden="true">✓</span>' : ""}</div>
+        <div class="project-card-meta-row">
+          <span class="project-card-platform">
+            <i data-lucide="${platformMeta.icon}" aria-hidden="true"></i>
+            ${esc(platformMeta.label)}
+          </span>
+          <span class="project-card-divider" aria-hidden="true">|</span>
+          <span class="project-card-progress">${done}/${total} findings${allDone ? ' <span aria-hidden="true">✓</span>' : ""}</span>
+        </div>
+        ${expiryHtml}
       </div>
       <div class="card-actions">
         <button class="btn btn-sm btn-tertiary" data-action="open" aria-label="Open ${esc(proj.name)}">
           Open
           <i data-lucide="arrow-right" aria-hidden="true"></i>
         </button>
-        <button class="btn btn-sm btn-icon" data-action="edit" data-pid="${proj.id}" aria-label="Edit name for ${esc(proj.name)}">
+        <button class="btn btn-sm btn-icon" data-action="edit" data-pid="${proj.id}" aria-label="Edit ${esc(proj.name)}">
           <i data-lucide="pencil" aria-hidden="true"></i>
         </button>
         <button class="btn btn-sm btn-danger btn-icon" data-action="delete" aria-label="Delete ${esc(proj.name)}">
@@ -236,6 +368,8 @@ async function renderHome() {
     });
     list.appendChild(card);
   });
+
+  await renderDeletedSection();
   lucide.createIcons();
 }
 
@@ -306,8 +440,25 @@ async function openEditProjectDialog(projectId, openerEl) {
   const project = await getProject(projectId);
   if (!project) return;
   editingProjectId = projectId;
+
+  // Update dialog heading dynamically
+  document.getElementById('dialog-edit-project-heading').textContent = `Edit ${project.name}`;
+
   inputEditProjName.value = project.name;
   clearFieldError(inputEditProjName, errorEditProjName);
+
+  // Pre-fill platform radio
+  const currentPlatform = project.platform || 'other';
+  document.querySelectorAll('input[name="edit-proj-platform"]').forEach(radio => {
+    radio.checked = radio.value === currentPlatform;
+  });
+
+  // Pre-fill expiry date
+  if (project.expiresAt) {
+    const d = new Date(project.expiresAt);
+    document.getElementById('edit-proj-expires').value = d.toLocaleDateString('en-CA');
+  }
+
   openDialog(dialogEditProject, openerEl);
 }
 
@@ -327,6 +478,19 @@ formEditProject.addEventListener('submit', async e => {
   const project = await getProject(editingProjectId);
   if (!project) return;
   project.name = newName;
+
+  // Save platform
+  const newPlatform = document.querySelector('input[name="edit-proj-platform"]:checked')?.value || 'other';
+  project.platform = newPlatform;
+
+  // Save expiry date
+  const dateVal = document.getElementById('edit-proj-expires').value;
+  if (dateVal) {
+    const [y, m, day] = dateVal.split('-').map(Number);
+    const d = new Date(y, m - 1, day, 23, 59, 59, 999);
+    project.expiresAt = d.getTime();
+  }
+
   await upsertProject(project);
 
   // Update sidebar tab label
@@ -344,12 +508,13 @@ formEditProject.addEventListener('submit', async e => {
   if (currentProjectId === editingProjectId) {
     document.getElementById('project-heading').textContent = newName;
     document.getElementById('btn-edit-project-name').setAttribute(
-      'aria-label', `Edit name for ${newName}`
+      'aria-label', `Edit ${newName}`
     );
+    await renderProject();
   }
 
   closeDialog(dialogEditProject);
-  toast('✓ Successfully renamed project', 'success');
+  toast('✓ Successfully updated project', 'success');
   editingProjectId = null;
 });
 
@@ -510,7 +675,12 @@ document.getElementById("form-new-project").addEventListener("submit", async e =
   const name   = document.getElementById("proj-name").value.trim();
   if (!name) return;
 
-  const project = { id: uid(), name, createdAt: Date.now(), findings: [] };
+  const platform = document.querySelector('input[name="new-proj-platform"]:checked')?.value || 'other';
+  const project = {
+    id: uid(), name, platform, createdAt: Date.now(), findings: [],
+    importType: 'findings', expiresAt: Date.now() + 3 * 86400000,
+    addDismissedNote: false,
+  };
   await upsertProject(project);
   currentProjectId = project.id;
   importItems = [];
@@ -533,8 +703,24 @@ async function renderProject() {
   // Heading
   document.getElementById("project-heading").textContent = project.name;
   document.getElementById("btn-edit-project-name").setAttribute(
-    "aria-label", `Edit name for ${project.name}`
+    "aria-label", `Edit ${project.name}`
   );
+
+  // Platform label
+  const platformMeta = PLATFORM_META[project.platform] || PLATFORM_META.other;
+  const platformEl = document.getElementById("project-platform-label");
+  if (platformEl) {
+    platformEl.innerHTML = `<i data-lucide="${platformMeta.icon}" aria-hidden="true"></i> ${esc(platformMeta.label)}`;
+  }
+
+  // Expiry info
+  const expiryInfoEl = document.getElementById("project-expiry-info");
+  if (expiryInfoEl && project.expiresAt) {
+    const isExpiringSoon = (project.expiresAt - Date.now()) <= 86400000;
+    expiryInfoEl.innerHTML = isExpiringSoon
+      ? `<div class="expiry-warning">${esc(formatExpiryDate(project.expiresAt))}</div>`
+      : `<span class="project-meta-label">${esc(formatExpiryDate(project.expiresAt))}</span>`;
+  }
 
   // Progress
   document.getElementById("progress-bar-fill").style.width = pct + "%";
@@ -565,9 +751,11 @@ async function renderProject() {
       if (f.completed) tr.classList.add("row-complete");
       if (f.id === currentFindingId) tr.classList.add("row-active");
 
-      const findingCell = f.findingUrl
-        ? `<a href="${esc(f.findingUrl)}" target="_blank">${esc(f.findingId)}</a>`
-        : esc(f.findingId);
+      const findingCell = f.findingId
+        ? (f.findingUrl
+            ? `<a href="${esc(f.findingUrl)}" target="_blank">${esc(f.findingId)}</a>`
+            : esc(f.findingId))
+        : '';
 
       const taskCell = f.taskId
         ? (f.taskUrl ? `<a href="${esc(f.taskUrl)}" target="_blank">${esc(f.taskId)}</a>` : esc(f.taskId))
@@ -631,10 +819,22 @@ document.getElementById("findings-tbody").addEventListener("click", e => {
   }
 });
 
-document.getElementById("btn-import-findings").addEventListener("click", () => {
+document.getElementById("btn-import-findings").addEventListener("click", async () => {
   importItems = [];
   renderImportPreview();
   document.getElementById("import-paste-area").innerHTML = "";
+
+  // Reflect and lock import type if project already has findings
+  const project = await getProject(currentProjectId);
+  const hasFindings = project?.findings.length > 0;
+  const currentType = project?.importType || 'findings';
+
+  document.querySelectorAll('input[name="import-type"]').forEach(radio => {
+    radio.checked = radio.value === currentType;
+    radio.disabled = hasFindings;
+  });
+  updateImportLabels(currentType);
+
   showSubView("project", "view-import");
 });
 
@@ -666,6 +866,14 @@ document.getElementById("btn-copy-md").addEventListener("click", () => {
   copyText(text, "MD table");
 });
 
+document.getElementById("chk-dismissed-note").addEventListener("change", async e => {
+  const project = await getProject(currentProjectId);
+  if (!project) return;
+  project.addDismissedNote = e.target.checked;
+  await upsertProject(project);
+  renderMdOutput(project);
+});
+
 document.getElementById("btn-download-excel").addEventListener("click", async () => {
   const project = await getProject(currentProjectId);
   if (!project) return;
@@ -673,6 +881,7 @@ document.getElementById("btn-download-excel").addEventListener("click", async ()
 });
 
 function renderMdOutput(project) {
+  const hasDismissed    = project.findings.some(f => f.status === 'Dismissed');
   const showInternalCol = project.findings.some(
     f => f.status === "Dismissed" && (f.internalTracking || f.internalTrackingName)
   );
@@ -682,9 +891,9 @@ function renderMdOutput(project) {
   const divider = showInternalCol ? "|---|---|---|---|" : "|---|---|---|";
 
   const rows = project.findings.map(f => {
-    const findingCell = f.findingUrl
-      ? `[${f.findingId}](${f.findingUrl})`
-      : f.findingId;
+    const findingCell = f.findingId
+      ? (f.findingUrl ? `[${f.findingId}](${f.findingUrl})` : f.findingId)
+      : '';
     const taskCell = f.taskId
       ? (f.taskUrl && f.status !== "Dismissed" ? `[${f.taskId}](${f.taskUrl})` : f.taskId)
       : "";
@@ -696,7 +905,19 @@ function renderMdOutput(project) {
     return `| ${statusCell} | ${findingCell} | ${taskCell} | ${internalCell} |`;
   });
 
-  document.getElementById("md-output").value = [header, divider, ...rows].join("\n");
+  // Show/hide dismissed note checkbox
+  const noteWrap = document.getElementById('dismissed-note-wrap');
+  noteWrap.classList.toggle('hidden', !hasDismissed);
+
+  // Restore saved checkbox state
+  const chk = document.getElementById('chk-dismissed-note');
+  chk.checked = !!project.addDismissedNote;
+
+  let output = [header, divider, ...rows].join("\n");
+  if (hasDismissed && chk.checked) {
+    output += DISMISSED_NOTE;
+  }
+  document.getElementById("md-output").value = output;
 }
 
 function downloadExcel(project) {
@@ -724,6 +945,24 @@ function downloadExcel(project) {
 }
 
 // ── VIEW: IMPORT ──────────────────────────────────────────
+function updateImportLabels(type) {
+  const isTasks = type === 'tasks';
+  document.getElementById('paste-area-label').textContent =
+    isTasks ? 'Paste Tasks' : 'Paste findings';
+  document.getElementById('import-paste-area').dataset.placeholder =
+    isTasks
+      ? 'Paste your tasks here… (IDs, links, or linked text)'
+      : 'Paste your findings here… (IDs, links, or linked text)';
+  document.querySelector('label[for="manual-id"]').textContent =
+    isTasks ? 'Task ID' : 'Finding ID';
+}
+
+document.querySelectorAll('input[name="import-type"]').forEach(radio => {
+  radio.addEventListener('change', e => {
+    if (e.target.checked) updateImportLabels(e.target.value);
+  });
+});
+
 // Paste area logic
 const pasteArea = document.getElementById("import-paste-area");
 
@@ -750,7 +989,7 @@ pasteArea.addEventListener("paste", e => {
   }
 
   // Plain text fallback
-  const lines = plain.split("\n").map(l => l.trim()).filter(Boolean);
+  const lines = plain.split(/[\n,]+/).map(l => l.trim()).filter(Boolean);
   pasteArea.innerHTML = lines.map(l => `<div>${esc(l)}</div>`).join("");
 });
 
@@ -801,22 +1040,42 @@ document.getElementById("btn-save-import").addEventListener("click", async () =>
   const project = await getProject(currentProjectId);
   if (!project) return;
 
-  // Add only new findings (avoid duplicates by findingId)
+  const selectedType = document.querySelector('input[name="import-type"]:checked')?.value || 'findings';
+  project.importType = selectedType;
+
   importItems.forEach(item => {
-    const exists = project.findings.some(f => f.findingId === item.findingId);
+    const exists = project.findings.some(f =>
+      (f.findingId && f.findingId === item.findingId) ||
+      (f.taskId    && f.taskId    === item.findingId)
+    );
     if (!exists) {
-      project.findings.push({
-        id:              item.id || uid(),
-        findingId:       item.findingId,
-        findingUrl:      item.findingUrl || null,
-        taskId:          "",
-        taskUrl:         null,
-        status:          "",
-        internalTrackingName: "",
-        internalTracking:     "",
-        environment:     "",
-        completed:       false,
-      });
+      if (selectedType === 'tasks') {
+        project.findings.push({
+          id:               item.id || uid(),
+          findingId:        "",
+          findingUrl:       null,
+          taskId:           item.findingId,
+          taskUrl:          item.findingUrl,
+          status:           "",
+          internalTrackingName: "",
+          internalTracking: "",
+          environment:      "",
+          completed:        false,
+        });
+      } else {
+        project.findings.push({
+          id:               item.id || uid(),
+          findingId:        item.findingId,
+          findingUrl:       item.findingUrl || null,
+          taskId:           "",
+          taskUrl:          null,
+          status:           "",
+          internalTrackingName: "",
+          internalTracking: "",
+          environment:      "",
+          completed:        false,
+        });
+      }
     }
   });
 
@@ -845,14 +1104,18 @@ function extractPasteItems() {
   };
 
   if (blocks.length === 0) {
-    pasteArea.textContent.trim().split("\n").forEach(l => {
-      if (l.trim()) processText(l.trim(), null);
+    pasteArea.textContent.trim().split(/[\n,]+/).map(l => l.trim()).filter(Boolean).forEach(l => {
+      processText(l, null);
     });
   } else {
     blocks.forEach(block => {
       const a = block.querySelector("a");
       const text = block.textContent.trim();
-      processText(text, a ? a.href : null);
+      if (!a && text.includes(',')) {
+        text.split(',').map(t => t.trim()).filter(Boolean).forEach(t => processText(t, null));
+      } else {
+        processText(text, a ? a.href : null);
+      }
     });
   }
 
@@ -933,16 +1196,30 @@ async function openValidation(findingId) {
     }
   }
 
-  // Enable/disable "Open in Browser" based on whether a URL is stored
-  document.getElementById("btn-open-finding").disabled = !finding?.findingUrl;
+  // Determine which URL to open based on import type
+  const openUrl = project?.importType === 'tasks'
+    ? finding?.taskUrl
+    : finding?.findingUrl;
+  document.getElementById("btn-open-finding").disabled = !openUrl;
+  document.getElementById("btn-open-finding").dataset.openUrl = openUrl || '';
 
-  // Set validation heading
-  document.getElementById("validation-heading").textContent =
-    "Validate: " + (finding?.findingId || "Finding");
+  // Apply platform-specific tool rules
+  applyPlatformToolRules(project?.platform || 'other');
+
+  // Set validation heading — use taskId as fallback for task-type projects
+  const headingId = finding?.findingId ||
+    (project?.importType === 'tasks' ? finding?.taskId : null) ||
+    "Finding";
+  document.getElementById("validation-heading").textContent = "Validate: " + headingId;
 
   // Hide output section until Update is clicked
   document.getElementById("val-output-section").classList.add("hidden");
   showSubView("project", "view-validation");
+
+  // Move focus to the validation heading
+  requestAnimationFrame(() => {
+    document.getElementById('validation-heading').focus();
+  });
 }
 
 function resetValidationForm() {
@@ -959,8 +1236,26 @@ function resetValidationForm() {
   document.getElementById("val-task-comment").value = "";
   document.getElementById("field-internal-tracking").classList.add("hidden");
   document.getElementById("btn-open-finding").disabled = true;
+  document.getElementById("btn-open-finding").dataset.openUrl = '';
   document.querySelectorAll("input[name='tools']").forEach(c => c.checked = false);
+  applyPlatformToolRules('other');
+}
 
+function applyPlatformToolRules(platform) {
+  const rules = {
+    web:     ['VoiceOver', 'TalkBack'],
+    android: ['VoiceOver', 'NVDA'],
+    ios:     ['NVDA', 'TalkBack'],
+    other:   [],
+  };
+  const toDisable = rules[platform] || [];
+
+  document.querySelectorAll('input[name="tools"]').forEach(cb => {
+    const shouldDisable = toDisable.includes(cb.value);
+    cb.disabled = shouldDisable;
+    if (shouldDisable) cb.checked = false;
+    cb.closest('label')?.classList.toggle('tool-disabled', shouldDisable);
+  });
 }
 
 // Status select → show/hide dismissed field + pre-fill comment template
@@ -1052,7 +1347,6 @@ async function getActivePageTab(preferredUrl = null, pageType = null) {
 // ── PULL FROM PAGE ────────────────────────────────────────
 document.getElementById("btn-pull-page").addEventListener("click", async () => {
   try {
-    // Use stored finding URL to locate the exact tab
     const project = await getProject(currentProjectId);
     const finding = project?.findings.find(f => f.id === currentFindingId);
     const tab = await getActivePageTab(finding?.findingUrl || null, "finding");
@@ -1063,33 +1357,40 @@ document.getElementById("btn-pull-page").addEventListener("click", async () => {
 
     const data = results?.[0]?.result;
     if (!data) throw new Error("No data returned");
-
     if (data.error) throw new Error(data.error);
 
-    // Populate pulled fields
-    if (data.findingId) {
-      document.getElementById("pulled-finding-id").value = data.findingId;
-    }
-    if (data.taskId)   document.getElementById("pulled-task-id").value = data.taskId;
-    if (data.envUrl)   document.getElementById("pulled-environment").value = data.envUrl;
+    if (project?.importType === 'tasks') {
+      // For task-type: populate finding data only, preserve task data
+      if (data.findingId) {
+        document.getElementById("pulled-finding-id").value = data.findingId;
+        if (finding) finding.findingId = data.findingId;
+      }
+      if (finding) finding.findingUrl = tab.url;
+      if (data.envUrl) {
+        document.getElementById("pulled-environment").value = data.envUrl;
+        if (finding) finding.environment = data.envUrl;
+      }
+      // Do NOT update taskId or taskUrl
+    } else {
+      // Existing findings-type logic
+      if (data.findingId) {
+        document.getElementById("pulled-finding-id").value = data.findingId;
+      }
+      if (data.taskId)   document.getElementById("pulled-task-id").value = data.taskId;
+      if (data.envUrl)   document.getElementById("pulled-environment").value = data.envUrl;
+      if (data.taskUrl) {
+        document.getElementById("pulled-task-id").dataset.taskUrl = data.taskUrl;
+      }
 
-    // Store task URL for saving later
-    if (data.taskUrl) {
-      document.getElementById("pulled-task-id").dataset.taskUrl = data.taskUrl;
-    }
-
-    // Update stored finding with pulled environment
-    if (currentProjectId && currentFindingId) {
-      const project = await getProject(currentProjectId);
-      const finding = project?.findings.find(f => f.id === currentFindingId);
       if (finding) {
         if (data.findingId) finding.findingId = data.findingId;
         if (data.envUrl)    finding.environment = data.envUrl;
         if (data.taskId)    finding.taskId = data.taskId;
         if (data.taskUrl)   finding.taskUrl = data.taskUrl;
-        await upsertProject(project);
       }
     }
+
+    if (finding) await upsertProject(project);
 
   } catch (err) {
     toast("Error: " + (err.message || "could not pull data — are you on a finding page?"), "error");
@@ -1331,14 +1632,10 @@ document.getElementById("btn-save-to-table").addEventListener("click", async () 
 });
 
 // ── NEXT FINDING ──────────────────────────────────────────
-document.getElementById("btn-open-finding").addEventListener("click", async () => {
-  const project = await getProject(currentProjectId);
-  const finding = project?.findings.find(f => f.id === currentFindingId);
-  if (finding?.findingUrl) {
-    chrome.tabs.create({ url: finding.findingUrl });
-  } else {
-    toast("Error: no URL stored for this finding", "error");
-  }
+document.getElementById("btn-open-finding").addEventListener("click", () => {
+  const url = document.getElementById("btn-open-finding").dataset.openUrl;
+  if (url) chrome.tabs.create({ url });
+  else toast("Error: no URL stored for this finding", "error");
 });
 
 document.getElementById("btn-next-finding").addEventListener("click", async () => {
@@ -1384,6 +1681,9 @@ function statusClass(status) {
 
 // ── INIT ──────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
+  document.getElementById('version-number').textContent =
+    chrome.runtime.getManifest().version;
+  await deleteExpiredProjects();
   await renderHome();
   activateTab("projects");
   lucide.createIcons();

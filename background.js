@@ -40,3 +40,40 @@ chrome.windows.onRemoved.addListener(windowId => {
     lavaWindowId = null;
   }
 });
+
+// ── AUTO-DELETE ALARM ──────────────────────────────────────
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create('checkExpiredProjects', { periodInMinutes: 60 });
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  chrome.alarms.create('checkExpiredProjects', { periodInMinutes: 60 });
+});
+
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === 'checkExpiredProjects') {
+    deleteExpiredProjects();
+  }
+});
+
+async function deleteExpiredProjects() {
+  const data = await chrome.storage.local.get(['lava_projects', 'lava_deleted_projects']);
+  const projects = data.lava_projects || [];
+  const deleted  = data.lava_deleted_projects || [];
+  const now      = Date.now();
+
+  const surviving = [];
+  projects.forEach(p => {
+    if (p.expiresAt && p.expiresAt <= now) {
+      // Security: only preserve name and timestamp
+      deleted.push({ name: p.name, deletedAt: now });
+    } else {
+      surviving.push(p);
+    }
+  });
+
+  await chrome.storage.local.set({
+    lava_projects: surviving,
+    lava_deleted_projects: deleted,
+  });
+}

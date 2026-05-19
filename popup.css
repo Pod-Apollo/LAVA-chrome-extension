@@ -694,11 +694,37 @@ h3.section-title:has(+ .btn-row) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-bottom: 0.35rem;
+}
+
+.project-card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--f-mono-350);
+  color: var(--clr-neutral-700);
+  flex-wrap: wrap;
+}
+
+.project-card-platform {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.project-card-divider {
+  color: var(--clr-neutral-400);
+  user-select: none;
 }
 
 .project-card-progress {
-  font: var(--f-mono-350);
   color: var(--clr-neutral-700);
+}
+
+.project-card-expiry {
+  font-size: 12px;
+  color: var(--clr-neutral-700);
+  margin-top: 0.25rem;
 }
 
 /* ── Toast ───────────────────────────────────────────────── */
@@ -1060,6 +1086,150 @@ dialog .field {
   font-size: 0.75rem;
 }
 
+
+/* ── Sidebar version label ───────────────────────────────── */
+.sidebar-version {
+  font-size: 11px;
+  color: var(--clr-neutral-600);
+  padding: 8px 12px;
+  margin-top: auto;
+  opacity: 1;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+#sidebar.collapsed .sidebar-version {
+  display: none;
+}
+
+/* ── Project meta labels (platform, expiry) ──────────────── */
+.project-meta-label {
+  font: var(--f-primary-300);
+  color: var(--clr-neutral-700);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+
+/* ── Expiry warning ──────────────────────────────────────── */
+.expiry-warning {
+  color: var(--clr-feedback-danger-700);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.project-card.expiring-soon {
+  border-color: var(--clr-feedback-danger-300);
+}
+
+/* ── Ghost cards ─────────────────────────────────────────── */
+.project-card-ghost {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+#recently-deleted-section {
+  margin-top: 1.5rem;
+}
+
+#recently-deleted-section .section-title {
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+/* ── Radio groups ────────────────────────────────────────── */
+.radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin-top: var(--field-gap);
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font: var(--f-primary-300);
+  cursor: pointer;
+}
+
+.radio-label input[type="radio"] {
+  width: auto;
+  cursor: pointer;
+}
+
+.radio-label input[type="radio"]:disabled {
+  cursor: not-allowed;
+}
+
+.radio-label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Checkbox label ──────────────────────────────────────── */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: var(--f-primary-300);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
+/* ── Disabled tool labels ────────────────────────────────── */
+/* Color meets WCAG AA 4.5:1 against --clr-accent-tertiary-50 background,
+   but is visibly lighter than the near-black enabled label color. */
+.tool-disabled {
+  color: hsl(237, 9%, 43%);
+  cursor: not-allowed;
+}
+
+.tool-disabled input[type="checkbox"] {
+  cursor: not-allowed;
+  opacity: 0.5; /* checkboxes exempt from 3:1 per user spec */
+}
+
+/* ── Platform fieldset in edit dialog (matches tools-fieldset styling) ── */
+.platform-fieldset {
+  border: none;
+}
+
+.platform-fieldset legend {
+  font: var(--f-primary-200);
+  color: var(--clr-neutral-950);
+  padding: 0 4px;
+}
+
+.platform-fieldset .radio-group {
+  border: 1px solid var(--clr-accent-tertiary-200);
+  background-color: var(--clr-accent-tertiary-50);
+  border-radius: var(--radius);
+  padding: 1rem 0.875rem;
+  margin-top: var(--field-gap);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+}
+
+/* ── Date input ──────────────────────────────────────────── */
+input[type="date"] {
+  width: 100%;
+  border: 1px solid var(--input-border-default);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  font: var(--f-primary-400);
+  color: var(--clr-neutral-900);
+  background: var(--clr-neutral-50);
+  outline: none;
+}
 
 /* ══════════════════════════════════════════════════════════
    6. UTILITIES

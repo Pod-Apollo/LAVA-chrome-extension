@@ -30,6 +30,9 @@
           <span class="tab-label">Projects</span>
         </button>
       </div>
+      <div id="sidebar-version" class="sidebar-version" aria-label="Extension version">
+        v<span id="version-number"></span>
+      </div>
     </nav>
 
     <!-- ══ CONTENT ═══════════════════════════════════════════ -->
@@ -60,6 +63,10 @@
           </div>
           <div id="projects-list"></div>
           <p id="no-projects" class="empty-state hidden">No projects yet. Create one to get started.</p>
+          <section id="recently-deleted-section" hidden>
+            <h3 class="section-title">Recently deleted</h3>
+            <div id="recently-deleted-list"></div>
+          </section>
         </div>
 
         <!-- Subview: New Project -->
@@ -72,6 +79,15 @@
               <label for="proj-name">Project Name <span class="req">(required)</span></label>
               <input type="text" id="proj-name" required>
             </div>
+            <fieldset class="field platform-fieldset">
+              <legend>Platform</legend>
+              <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="new-proj-platform" value="web"> Web</label>
+                <label class="radio-label"><input type="radio" name="new-proj-platform" value="android"> Android</label>
+                <label class="radio-label"><input type="radio" name="new-proj-platform" value="ios"> iOS</label>
+                <label class="radio-label"><input type="radio" name="new-proj-platform" value="other" checked> Other</label>
+              </div>
+            </fieldset>
             <div class="btn-row">
               <button type="submit" class="btn btn-tertiary">Create Project</button>
               <button type="button" id="btn-cancel-new-project" class="btn">Cancel</button>
@@ -97,11 +113,11 @@
         <div id="view-project" class="subview subview-active">
           <div class="view-toolbar">
             <div class="project-actions-left">
-              <button id="btn-import-findings" class="btn  btn-icon-left">
+              <button id="btn-import-findings" class="btn btn-icon-left">
                 <span class="icon" aria-hidden="true">
                   <i data-lucide="plus"></i>
                 </span>
-                <span>Import Findings</span>
+                <span>Import Findings or Tasks</span>
               </button>
             </div>
             <button id="btn-delete-project" class="btn btn-danger btn-icon btn-icon-left" aria-label="Delete project">
@@ -123,6 +139,8 @@
                 <i data-lucide="pencil" aria-hidden="true"></i>
               </button>
             </div>
+            <p id="project-platform-label" class="project-meta-label"></p>
+            <div id="project-expiry-info"></div>
             <div id="progress-wrap">
               <div id="progress-bar-track">
                 <div id="progress-bar-fill"></div>
@@ -164,6 +182,12 @@
               </div>
             </div>
             <div class="hr"></div>
+            <div id="dismissed-note-wrap" class="field hidden">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-dismissed-note">
+                Add dismissed findings note
+              </label>
+            </div>
             <textarea id="md-output" readonly spellcheck="false" rows="6"></textarea>
             <p class="tip">Paste this directly into your delivery message.</p>
           </div>
@@ -172,9 +196,27 @@
         <!-- ════ VIEW: IMPORT FINDINGS ════ -->
         <div id="view-import" class="subview">
           <div>
-            <h2 class="view-title">Import Findings</h2>
+            <h2 class="view-title">Import Findings or Tasks</h2>
             <p class="view-description">Paste a list below — plain IDs, linked text, or bare URLs all work. Or add manually one at a time.</p>
           </div>
+
+          <section class="form-section">
+            <fieldset>
+              <legend class="section-title">What are you importing?</legend>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="import-type" id="import-type-findings"
+                         value="findings" checked>
+                  Findings
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="import-type" id="import-type-tasks"
+                         value="tasks">
+                  Tasks
+                </label>
+              </div>
+            </fieldset>
+          </section>
 
           <section class="form-section">
             <div class="field">
@@ -233,7 +275,7 @@
         <div id="view-validation" class="subview">
 
           <div class="view-toolbar">
-            <h2 class="view-title" id="validation-heading">Validate Finding</h2>
+            <h2 class="view-title" id="validation-heading" tabindex="-1">Validate Finding</h2>
           </div>
 
           <!-- Pulled from page -->
@@ -417,9 +459,9 @@
   <div id="toast" class="toast hidden" aria-hidden="true"></div>
   <div id="toast-announce" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <!-- ── DIALOG: Edit Project Name ──────────────────────────── -->
+  <!-- ── DIALOG: Edit Project ──────────────────────────────── -->
   <dialog id="dialog-edit-project" aria-labelledby="dialog-edit-project-heading">
-    <h2 id="dialog-edit-project-heading" class="dialog-heading">Edit Project Name</h2>
+    <h2 id="dialog-edit-project-heading" class="dialog-heading">Edit Project</h2>
     <form id="form-edit-project" method="dialog" novalidate>
       <div class="field">
         <label for="edit-proj-name">
@@ -433,6 +475,20 @@
           aria-describedby="edit-proj-name-error"
         >
         <span id="edit-proj-name-error" class="field-error hidden" role="alert"></span>
+      </div>
+      <fieldset class="field platform-fieldset">
+        <legend>Platform</legend>
+        <div class="radio-group">
+          <label class="radio-label"><input type="radio" name="edit-proj-platform" value="web"> Web</label>
+          <label class="radio-label"><input type="radio" name="edit-proj-platform" value="android"> Android</label>
+          <label class="radio-label"><input type="radio" name="edit-proj-platform" value="ios"> iOS</label>
+          <label class="radio-label"><input type="radio" name="edit-proj-platform" value="other" checked> Other</label>
+        </div>
+      </fieldset>
+      <div class="field">
+        <label for="edit-proj-expires">Auto-delete date</label>
+        <input type="date" id="edit-proj-expires">
+        <p class="field-hint">Project data will be permanently deleted at end of this day.</p>
       </div>
       <div class="btn-row dialog-actions">
         <button type="button" id="btn-edit-project-cancel" class="btn">Cancel</button>
